@@ -1,14 +1,10 @@
 import React, { useState } from 'react';
-import { Button, View, Text, Alert, Flex } from '@aws-amplify/ui-react';
-import '@aws-amplify/ui-react/styles.css';
-import { FaUpload, FaFileCode, FaFileAlt, FaFileUpload } from 'react-icons/fa';
-import './FileUpload.css';
+import { FaFileUpload } from 'react-icons/fa';
 
 const FileUpload = ({ onFileContent, onLanguageDetected, isLoading: externalIsLoading }) => {
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [fileName, setFileName] = useState('');
-    const [isAnimating, setIsAnimating] = useState(false);
 
     // List of supported file extensions with their corresponding languages
     const supportedExtensions = {
@@ -49,73 +45,11 @@ const FileUpload = ({ onFileContent, onLanguageDetected, isLoading: externalIsLo
         setError('');
 
         try {
-            // First, read the file content
+            // Read the file content
             const fileContent = await file.text();
             
-            // Get the token from localStorage
-            const token = localStorage.getItem('token');
-
-            // Create a JSON request body
-            const requestBody = {
-                fileName: file.name,
-                fileContent: fileContent,
-                fileType: fileExtension.substring(1) // Remove the dot from extension
-            };
-
-            // Upload the file to the API
-            const response = await fetch('https://emm58pr9b4.execute-api.us-east-1.amazonaws.com/newstage/upload', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(requestBody)
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('API Error Response:', errorText);
-                try {
-                    const errorData = JSON.parse(errorText);
-                    throw new Error(errorData.message || 'Failed to upload file');
-                } catch (parseError) {
-                    throw new Error(`Failed to upload file: ${errorText.substring(0, 100)}...`);
-                }
-            }
-
-            const responseText = await response.text();
-            console.log('API Response:', responseText);
-            
-            let data;
-            try {
-                data = JSON.parse(responseText);
-            } catch (parseError) {
-                console.error('JSON Parse Error:', parseError);
-                throw new Error('Invalid response format from server');
-            }
-            
-            // Check if we have the file content in the response
-            if (data.fileContent) {
-                // If the API returns the file content directly
-                onFileContent(data.fileContent);
-            } else if (data.s3Url) {
-                // If the API returns an S3 URL, fetch the content
-                const fileContentResponse = await fetch(data.s3Url, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                
-                if (!fileContentResponse.ok) {
-                    throw new Error('Failed to fetch file content from S3');
-                }
-                
-                const fileContent = await fileContentResponse.text();
-                onFileContent(fileContent);
-            } else {
-                // If we don't have file content or S3 URL, use the original file content
-                onFileContent(fileContent);
-            }
+            // Pass the file content to the parent component
+            onFileContent(fileContent);
 
             // Detect language based on file extension and notify parent component
             const detectedLanguage = supportedExtensions[fileExtension];
@@ -130,14 +64,12 @@ const FileUpload = ({ onFileContent, onLanguageDetected, isLoading: externalIsLo
         }
     };
 
-    const handleButtonClick = () => {
-        setIsAnimating(true);
-        document.getElementById('file-upload').click();
-        setTimeout(() => setIsAnimating(false), 500);
-    };
-
     return (
-        <View>
+        <div style={{ 
+            display: 'block', 
+            width: '100%',
+            marginBottom: '10px'
+        }}>
             <input
                 type="file"
                 accept={Object.keys(supportedExtensions).join(',')}
@@ -145,25 +77,53 @@ const FileUpload = ({ onFileContent, onLanguageDetected, isLoading: externalIsLo
                 style={{ display: 'none' }}
                 id="file-upload"
             />
-            <Flex direction="column" gap="0.5rem">
-                <Button
-                    isLoading={isLoading || externalIsLoading}
-                    onClick={handleButtonClick}
-                    variation="primary"
-                    size="small"
-                    className={`upload-button ${isAnimating ? 'animate' : ''}`}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <button
+                    onClick={() => document.getElementById('file-upload').click()}
+                    disabled={isLoading || externalIsLoading}
+                    style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        padding: '8px 16px',
+                        backgroundColor: '#0078d4',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontWeight: '600',
+                        fontSize: '14px',
+                        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.15)',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        userSelect: 'none',
+                        zIndex: 10,
+                        transition: 'all 0.2s ease',
+                        opacity: isLoading || externalIsLoading ? 0.7 : 1
+                    }}
                 >
-                    <FaFileUpload className="upload-icon" />
-                    <Text fontSize="small">Upload</Text>
-                </Button>
+                    <FaFileUpload style={{ fontSize: '16px' }} />
+                    <span>Upload</span>
+                </button>
                 {fileName && (
-                    <Text fontSize="small" color="gray">
+                    <div style={{ fontSize: '14px', color: '#666' }}>
                         {fileName}
-                    </Text>
+                    </div>
                 )}
-                {error && <Alert variation="error">{error}</Alert>}
-            </Flex>
-        </View>
+                {error && (
+                    <div style={{ 
+                        padding: '8px 12px', 
+                        backgroundColor: '#ffebee', 
+                        color: '#d32f2f', 
+                        borderRadius: '4px',
+                        fontSize: '14px'
+                    }}>
+                        {error}
+                    </div>
+                )}
+            </div>
+        </div>
     );
 };
 

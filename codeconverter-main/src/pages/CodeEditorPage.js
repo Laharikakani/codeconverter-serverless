@@ -20,6 +20,7 @@ import {
 import '@aws-amplify/ui-react/styles.css';
 import Editor from '@monaco-editor/react';
 import { FaCode, FaExchangeAlt, FaCopy, FaMicrophone, FaStop, FaPlay, FaPause, FaSignOutAlt, FaRobot, FaLanguage, FaCog, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
+import FileUpload from '../components/FileUpload';
 
 const CodeEditorPage = () => {
   const [sourceCode, setSourceCode] = useState(`public class Factorial {
@@ -306,8 +307,85 @@ const CodeEditorPage = () => {
       // Then replace tab characters with spaces
       formattedCode = formattedCode.replace(/\t/g, '    ');
       
+      // Special handling for Java code
+      if (formattedCode.includes('System.out.println') || formattedCode.includes('public class')) {
+        // Clean up any extra quotes or backticks that might be in the response
+        formattedCode = formattedCode.replace(/['"]\s*['"]/g, '');
+        formattedCode = formattedCode.replace(/```/g, '');
+        
+        // Remove any trailing semicolons followed by quotes or backticks
+        formattedCode = formattedCode.replace(/;\s*['"]\s*$/g, ';');
+        formattedCode = formattedCode.replace(/;\s*```\s*$/g, ';');
+        
+        // Remove any quotes or backticks that appear after the code
+        formattedCode = formattedCode.replace(/;\s*['"]\s*['"]/g, ';');
+        formattedCode = formattedCode.replace(/;\s*```\s*```/g, ';');
+        
+        // Remove any arrow or conversion markers
+        formattedCode = formattedCode.replace(/\s*→\s*/g, '');
+        formattedCode = formattedCode.replace(/\s*->\s*/g, '');
+        
+        // Remove any language names that might appear after the code
+        formattedCode = formattedCode.replace(/;\s*(python|javascript|java|csharp|rust|php|ruby|swift|typescript|kotlin|scala|html|css|sql)/gi, ';');
+        
+        // Remove any standalone quotes or backticks
+        formattedCode = formattedCode.replace(/^['"]\s*$/gm, '');
+        formattedCode = formattedCode.replace(/^```\s*$/gm, '');
+        
+        // Remove any standalone semicolons
+        formattedCode = formattedCode.replace(/^;\s*$/gm, '');
+        
+        // Remove any duplicate lines
+        const lines = formattedCode.split('\n');
+        const uniqueLines = [...new Set(lines)];
+        formattedCode = uniqueLines.join('\n');
+        
+        // Remove any lines that are just quotes or backticks
+        formattedCode = formattedCode.replace(/^['"]\s*['"]\s*$/gm, '');
+        formattedCode = formattedCode.replace(/^```\s*```\s*$/gm, '');
+        
+        // Remove any lines that are just the string literal
+        formattedCode = formattedCode.replace(/^"hello world"\s*$/gm, '');
+        formattedCode = formattedCode.replace(/^'hello world'\s*$/gm, '');
+        
+        // Remove any extra semicolons at the end of lines
+        formattedCode = formattedCode.replace(/;;+/g, ';');
+        
+        // Remove any trailing semicolons at the end of the code
+        formattedCode = formattedCode.replace(/;\s*$/, '');
+        
+        // Remove any extra quotes or backticks at the end of the code
+        formattedCode = formattedCode.replace(/['"]\s*$/, '');
+        formattedCode = formattedCode.replace(/```\s*$/, '');
+        
+        // Remove any extra quotes or backticks at the beginning of the code
+        formattedCode = formattedCode.replace(/^['"]\s*/, '');
+        formattedCode = formattedCode.replace(/^```\s*/, '');
+        
+        // Remove any extra quotes or backticks around the entire code
+        formattedCode = formattedCode.replace(/^['"]\s*([\s\S]*?)\s*['"]$/, '$1');
+        formattedCode = formattedCode.replace(/^```\s*([\s\S]*?)\s*```$/, '$1');
+        
+        // Ensure proper line breaks after semicolons
+        formattedCode = formattedCode.replace(/;(?!\s*\n)/g, ';\n');
+        
+        // Ensure proper line breaks after curly braces
+        formattedCode = formattedCode.replace(/{/g, '{\n');
+        formattedCode = formattedCode.replace(/}/g, '\n}');
+        
+        // Remove any empty lines
+        formattedCode = formattedCode.replace(/^\s*$\n/gm, '');
+        
+        // Trim any extra whitespace
+        formattedCode = formattedCode.trim();
+        
+        // If the code is just a single line with System.out.println, return it without any extra formatting
+        if (formattedCode.includes('System.out.println') && !formattedCode.includes('\n')) {
+          return formattedCode;
+        }
+      } 
       // Special handling for C# code
-      if (formattedCode.includes('namespace') || formattedCode.includes('using System;')) {
+      else if (formattedCode.includes('namespace') || formattedCode.includes('using System;')) {
         // Ensure proper line breaks after semicolons
         formattedCode = formattedCode.replace(/;(?!\s*\n)/g, ';\n');
         
@@ -410,7 +488,13 @@ const CodeEditorPage = () => {
         /import\s+\w+/,
         /from\s+\w+\s+import/,
         /class\s+\w+:/,
-        /if\s+__name__\s*==\s*('|")__main__('|"):/
+        /if\s+__name__\s*==\s*('|")__main__('|"):/,
+        /print\s*\(/,  // Add support for print statements
+        /print\s+/,    // Add support for Python 2 style print
+        /^\s*[a-zA-Z_][a-zA-Z0-9_]*\s*=/,  // Add support for variable assignments
+        /^\s*if\s+/,   // Add support for if statements
+        /^\s*for\s+/,  // Add support for for loops
+        /^\s*while\s+/ // Add support for while loops
       ],
       javascript: [
         /function\s+\w+\s*\(/,
@@ -466,9 +550,19 @@ const CodeEditorPage = () => {
         /guard\s+let/
       ]
     };
+
     // If we don't have patterns for this language, return true
     if (!languagePatterns[language]) {
       return true;
+    }
+
+    // For Python, also check for simple statements without patterns
+    if (language === 'python') {
+      // Check if the code is a simple Python statement
+      const simplePythonPattern = /^[a-zA-Z0-9_\s\(\)\[\]\{\}\+\-\*\/\=\<\>\&\|\!\~\@\#\$\%\^\&\*\(\)\-\+\=\[\]\{\}\\\|\;\:\'\"\<\>\,\.\?\/]+$/;
+      if (simplePythonPattern.test(code.trim())) {
+        return true;
+      }
     }
 
     // Check if any of the patterns match
@@ -647,40 +741,47 @@ const CodeEditorPage = () => {
         >
           <Card variation="elevated" padding="1.5rem" style={{ borderRadius: '12px' }}>
             <Flex direction="column" gap="1rem">
-              <Heading level={2} style={{ fontFamily: "'Poppins', 'Segoe UI', sans-serif", color: '#0078d4' }}>
-                <Flex alignItems="center" gap="0.5rem">
-                  <FaCode size={20} />
-                  <span>Source Code</span>
-                </Flex>
-              </Heading>
-              <View height="300px" border="1px solid" borderColor="#d1d1d1" borderRadius="8px" overflow="hidden">
+              <div style={{ marginBottom: '20px' }}>
+                <div style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    marginBottom: '15px',
+                    padding: '10px',
+                    backgroundColor: '#f5f5f5',
+                    borderRadius: '8px',
+                    border: '1px solid #e0e0e0'
+                }}>
+                    <Heading level={2} style={{ 
+                        fontFamily: "'Space Grotesk', 'Poppins', sans-serif",
+                        color: '#1a1a1a',
+                        margin: 0
+                    }}>
+                        Source Code
+                    </Heading>
+                    <FileUpload 
+                        onFileContent={(content) => setSourceCode(content)}
+                        onLanguageDetected={(lang) => setSourceLanguage(lang)}
+                        isLoading={isLoading}
+                    />
+                </div>
                 <Editor
-                  height="100%"
-                  defaultLanguage={sourceLanguage}
-                  value={sourceCode}
-                  onChange={setSourceCode}
-                  theme="vs-dark"
-                  options={{
-                    minimap: { enabled: false },
-                    fontSize: 14,
-                    lineNumbers: 'on',
-                    roundedSelection: false,
-                    scrollBeyondLastLine: false,
-                    readOnly: false,
-                    automaticLayout: true,
-                    scrollbar: {
-                      vertical: 'visible',
-                      horizontal: 'visible',
-                      verticalScrollbarSize: 10,
-                      horizontalScrollbarSize: 10,
-                      useShadows: false,
-                      verticalHasArrows: false,
-                      horizontalHasArrows: false,
-                      arrowSize: 0,
-                    }
-                  }}
+                    height="400px"
+                    defaultLanguage={sourceLanguage}
+                    value={sourceCode}
+                    onChange={setSourceCode}
+                    theme="vs-dark"
+                    options={{
+                        minimap: { enabled: false },
+                        fontSize: 14,
+                        lineNumbers: 'on',
+                        roundedSelection: false,
+                        scrollBeyondLastLine: false,
+                        readOnly: false,
+                        automaticLayout: true,
+                    }}
                 />
-              </View>
+              </div>
             </Flex>
           </Card>
           

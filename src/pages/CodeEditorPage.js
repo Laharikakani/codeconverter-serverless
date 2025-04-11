@@ -49,7 +49,6 @@ const CodeEditorPage = () => {
     'python', 'javascript', 'java', 'csharp', 
     'rust', 'php', 'ruby', 'swift'
   ]);
-  const [isFileUploading, setIsFileUploading] = useState(false);
   const navigate = useNavigate();
   const { tokens } = useTheme();
 
@@ -251,40 +250,12 @@ const CodeEditorPage = () => {
     navigate('/login');
   };
 
-  const handleFileContent = async (content) => {
-    try {
-      setIsFileUploading(true);
-      setError('');
-      setSuccess('');
-      
-      // Validate content
-      if (!content || typeof content !== 'string') {
-        throw new Error('Invalid file content received');
-      }
-      
-      // Set the source code
-      setSourceCode(content);
-      setSuccess('File uploaded successfully!');
-    } catch (err) {
-      console.error('Error handling file content:', err);
-      setError(`Failed to process file: ${err.message}`);
-    } finally {
-      setIsFileUploading(false);
-    }
+  const handleFileContent = (content) => {
+    setSourceCode(content);
   };
 
   const handleLanguageDetected = (language) => {
-    try {
-      if (!supportedLanguages.includes(language)) {
-        console.warn(`Detected language ${language} is not in supported languages list`);
-        return;
-      }
-      setSourceLanguage(language);
-      console.log(`Language detected and set to: ${language}`);
-    } catch (err) {
-      console.error('Error setting detected language:', err);
-      // Don't show error to user as this is a non-critical feature
-    }
+    setSourceLanguage(language);
   };
 
   // Helper function to format code with proper line breaks
@@ -691,13 +662,20 @@ const CodeEditorPage = () => {
                   <span>Source Code</span>
                 </Flex>
               </Heading>
-              <Flex justifyContent="flex-end">
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'flex-end', 
+                marginBottom: '15px',
+                padding: '10px',
+                backgroundColor: '#f5f5f5',
+                borderRadius: '8px',
+                border: '1px solid #e0e0e0'
+              }}>
                 <FileUpload 
                   onFileContent={handleFileContent} 
                   onLanguageDetected={handleLanguageDetected}
-                  isLoading={isFileUploading}
                 />
-              </Flex>
+              </div>
               <Editor
                 height="400px"
                 defaultLanguage={sourceLanguage}

@@ -7,6 +7,7 @@ import WelcomePage from './pages/WelcomePage';
 import CodeEditorPage from './pages/CodeEditorPage';
 import HomePage from './pages/HomePage';
 import NotFound from './pages/NotFound';
+import VerifyPage from './pages/VerifyPage';
 import './styles/App.css';
 
 // Protected Route component
@@ -29,6 +30,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
+            <Route path="/verify" element={<VerifyPage />} />
             <Route 
               path="/welcome" 
               element={

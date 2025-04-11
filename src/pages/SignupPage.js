@@ -9,8 +9,12 @@ import {
   TextField,
   View,
   useTheme,
-  Alert
+  Alert,
+  Icon,
+  Divider
 } from '@aws-amplify/ui-react';
+import { MdPerson, MdEmail, MdLock, MdArrowForward } from 'react-icons/md';
+import { FaGoogle, FaGithub } from 'react-icons/fa';
 import '@aws-amplify/ui-react/styles.css';
 
 const SignupPage = () => {
@@ -42,6 +46,7 @@ const SignupPage = () => {
     setSuccess('');
     
     try {
+      // First try to connect to the API
       const response = await fetch('https://7fmhg0usa0.execute-api.us-east-1.amazonaws.com/newstage/signup', {
         method: 'POST',
         headers: {
@@ -57,16 +62,27 @@ const SignupPage = () => {
       const data = await response.json();
       
       if (!response.ok) {
-        // Check if the error is due to user already existing
-        if (data.message && (
-          data.message.toLowerCase().includes('already exists') || 
-          data.message.toLowerCase().includes('already registered') ||
-          data.message.toLowerCase().includes('user exists')
-        )) {
-          throw new Error('An account with this email already exists. Please login instead.');
-        }
-        throw new Error(data.message || 'Signup failed');
+        throw new Error(data.message || 'Signup failed. Please try again.');
       }
+      
+      // Only store in localStorage if API call succeeds
+      const registeredUsers = JSON.parse(localStorage.getItem('registeredUsers') || '[]');
+      
+      // Check if user already exists
+      if (registeredUsers.some(user => user.email === email)) {
+        throw new Error('An account with this email already exists. Please login instead.');
+      }
+      
+      // Add the new user to the list
+      registeredUsers.push({
+        name,
+        email,
+        password,
+        createdAt: new Date().toISOString()
+      });
+      
+      // Save the updated list
+      localStorage.setItem('registeredUsers', JSON.stringify(registeredUsers));
       
       setSuccess('Account created successfully! A verification code has been sent to your email.');
       
@@ -91,32 +107,47 @@ const SignupPage = () => {
       minHeight="100vh"
       backgroundColor={tokens.colors.background.secondary}
     >
-      <Card variation="elevated" padding="2rem" width="100%" maxWidth="500px">
-        <Flex direction="column" gap="1.5rem">
-          <Heading level={1} textAlign="center">
-            Sign Up
-          </Heading>
+      <Card 
+        variation="elevated" 
+        padding="2.5rem" 
+        width="100%" 
+        maxWidth="500px"
+        borderRadius="16px"
+        boxShadow="0 8px 24px rgba(0, 0, 0, 0.12)"
+      >
+        <Flex direction="column" gap="2rem">
+          <Flex direction="column" alignItems="center" gap="0.5rem">
+            <Heading level={1} textAlign="center" fontSize="2.5rem" fontWeight="700">
+              Create Account
+            </Heading>
+            <Text textAlign="center" color={tokens.colors.font.secondary}>
+              Join our community of developers
+            </Text>
+          </Flex>
           
           {error && (
-            <Alert variation="error" isDismissible={true}>
+            <Alert variation="error" isDismissible={true} borderRadius="8px">
               {error}
             </Alert>
           )}
           
           {success && (
-            <Alert variation="success" isDismissible={true}>
+            <Alert variation="success" isDismissible={true} borderRadius="8px">
               {success}
             </Alert>
           )}
           
           <form onSubmit={handleSignup}>
-            <Flex direction="column" gap="1rem">
+            <Flex direction="column" gap="1.5rem">
               <TextField
                 label="Name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Enter your name"
                 required
+                size="large"
+                borderRadius="8px"
+                leftIcon={<Icon as={MdPerson} />}
               />
               
               <TextField
@@ -126,6 +157,9 @@ const SignupPage = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
                 required
+                size="large"
+                borderRadius="8px"
+                leftIcon={<Icon as={MdEmail} />}
               />
               
               <TextField
@@ -135,6 +169,9 @@ const SignupPage = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
                 required
+                size="large"
+                borderRadius="8px"
+                leftIcon={<Icon as={MdLock} />}
               />
               
               <TextField
@@ -144,6 +181,9 @@ const SignupPage = () => {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Confirm your password"
                 required
+                size="large"
+                borderRadius="8px"
+                leftIcon={<Icon as={MdLock} />}
               />
               
               <Button
@@ -151,17 +191,59 @@ const SignupPage = () => {
                 variation="primary"
                 size="large"
                 isLoading={isLoading}
-                loadingText="Signing up..."
+                loadingText="Creating account..."
                 width="100%"
+                borderRadius="8px"
+                height="48px"
+                fontSize="1.1rem"
+                fontWeight="600"
+                rightIcon={<Icon as={MdArrowForward} />}
               >
                 Sign Up
               </Button>
             </Flex>
           </form>
           
+          <Divider />
+          
+          <Flex direction="column" gap="1rem">
+            <Text textAlign="center" color={tokens.colors.font.secondary}>
+              Or sign up with
+            </Text>
+            <Flex gap="1rem" justifyContent="center">
+              <Button
+                variation="outline"
+                size="large"
+                borderRadius="8px"
+                leftIcon={<Icon as={FaGoogle} />}
+                width="100%"
+                height="48px"
+              >
+                Google
+              </Button>
+              <Button
+                variation="outline"
+                size="large"
+                borderRadius="8px"
+                leftIcon={<Icon as={FaGithub} />}
+                width="100%"
+                height="48px"
+              >
+                GitHub
+              </Button>
+            </Flex>
+          </Flex>
+          
           <Flex justifyContent="center" gap="0.5rem">
-            <Text>Already have an account?</Text>
-            <Link to="/login" style={{ color: '#0078d4' }}>
+            <Text color={tokens.colors.font.secondary}>Already have an account?</Text>
+            <Link 
+              to="/login" 
+              style={{ 
+                color: tokens.colors.brand.primary[100],
+                fontWeight: '600',
+                textDecoration: 'none'
+              }}
+            >
               Login
             </Link>
           </Flex>

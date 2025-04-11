@@ -10,8 +10,10 @@ import {
   View,
   useTheme,
   Alert,
-  Divider
+  Divider,
+  Icon
 } from '@aws-amplify/ui-react';
+import { MdEmail, MdLock, MdArrowForward, MdRefresh } from 'react-icons/md';
 import '@aws-amplify/ui-react/styles.css';
 
 const VerifyPage = () => {
@@ -136,36 +138,47 @@ const VerifyPage = () => {
       minHeight="100vh"
       backgroundColor={tokens.colors.background.secondary}
     >
-      <Card variation="elevated" padding="2rem" width="100%" maxWidth="500px">
-        <Flex direction="column" gap="1.5rem">
-          <Heading level={1} textAlign="center">
-            Verify Your Email
-          </Heading>
-          
-          <Text textAlign="center">
-            We've sent a verification code to <strong>{email}</strong>. Please enter it below to verify your account.
-          </Text>
+      <Card 
+        variation="elevated" 
+        padding="2.5rem" 
+        width="100%" 
+        maxWidth="500px"
+        borderRadius="16px"
+        boxShadow="0 8px 24px rgba(0, 0, 0, 0.12)"
+      >
+        <Flex direction="column" gap="2rem">
+          <Flex direction="column" alignItems="center" gap="0.5rem">
+            <Heading level={1} textAlign="center" fontSize="2.5rem" fontWeight="700">
+              Verify Your Email
+            </Heading>
+            <Text textAlign="center" color={tokens.colors.font.secondary}>
+              We've sent a verification code to <strong>{email}</strong>
+            </Text>
+          </Flex>
           
           {error && (
-            <Alert variation="error" isDismissible={true}>
+            <Alert variation="error" isDismissible={true} borderRadius="8px">
               {error}
             </Alert>
           )}
           
           {success && (
-            <Alert variation="success" isDismissible={true}>
+            <Alert variation="success" isDismissible={true} borderRadius="8px">
               {success}
             </Alert>
           )}
           
           <form onSubmit={handleVerify}>
-            <Flex direction="column" gap="1rem">
+            <Flex direction="column" gap="1.5rem">
               <TextField
                 label="Verification Code"
                 value={verificationCode}
                 onChange={(e) => setVerificationCode(e.target.value)}
                 placeholder="Enter the verification code"
                 required
+                size="large"
+                borderRadius="8px"
+                leftIcon={<Icon as={MdLock} />}
               />
               
               <Button
@@ -175,35 +188,40 @@ const VerifyPage = () => {
                 isLoading={isLoading}
                 loadingText="Verifying..."
                 width="100%"
+                borderRadius="8px"
+                height="48px"
+                fontSize="1.1rem"
+                fontWeight="600"
+                rightIcon={<Icon as={MdArrowForward} />}
               >
-                Verify
+                Verify Email
               </Button>
             </Flex>
           </form>
           
           <Divider />
           
-          <Flex direction="column" gap="0.5rem" alignItems="center">
-            <Text>Didn't receive a code?</Text>
+          <Flex direction="column" gap="1rem" alignItems="center">
+            <Text color={tokens.colors.font.secondary}>
+              Didn't receive a code?
+            </Text>
             <Button
-              variation="link"
+              variation="outline"
               onClick={handleResendCode}
               isLoading={isLoading}
               loadingText="Resending..."
               isDisabled={resendDisabled}
+              borderRadius="8px"
+              height="48px"
+              leftIcon={<Icon as={MdRefresh} />}
+              width="100%"
+              maxWidth="300px"
             >
               {resendDisabled 
-                ? `Resend code in ${countdown} seconds` 
+                ? `Resend code in ${countdown}s` 
                 : "Resend verification code"}
             </Button>
           </Flex>
-          
-          <Button
-            variation="link"
-            onClick={() => navigate('/signup')}
-          >
-            Back to Sign Up
-          </Button>
         </Flex>
       </Card>
     </View>

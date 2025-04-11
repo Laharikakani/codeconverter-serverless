@@ -43,44 +43,75 @@ const LoginPage = () => {
         throw new Error('Password must be at least 6 characters long');
       }
 
-      // Make API call to authenticate
-      const response = await fetch('https://7fmhg0usa0.execute-api.us-east-1.amazonaws.com/newstage/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        // Handle specific error cases
-        if (response.status === 401) {
-          throw new Error('Invalid email or password');
-        } else if (response.status === 403) {
-          throw new Error('Account is locked. Please contact support.');
-        } else if (data.message) {
-          throw new Error(data.message);
-        } else {
-          throw new Error('Login failed. Please try again.');
+      // Check if the user has signed up
+      try {
+        // First, check if we have any registered users in localStorage
+        const registeredUsers = JSON.parse(localStorage.getItem('registeredUsers') || '[]');
+        
+        // Find the user with matching email
+        const user = registeredUsers.find(u => u.email === email);
+        
+        if (!user) {
+          throw new Error('No account found with this email. Please sign up first.');
         }
-      }
-
-      // Store the token in localStorage
-      if (data.token) {
-        localStorage.setItem('token', data.token);
-        // Store user info if provided
-        if (data.user) {
-          localStorage.setItem('user', JSON.stringify(data.user));
+        
+        // Check if the password matches
+        if (user.password !== password) {
+          throw new Error('Invalid password. Please try again.');
         }
+        
+        // If we get here, the credentials are valid
+        console.log('Login successful for user:', email);
+        
+        // Store the token and user info
+        localStorage.setItem('token', 'user-token-' + Date.now());
+        localStorage.setItem('user', JSON.stringify({
+          email: user.email,
+          name: user.name,
+          role: 'user'
+        }));
+        
         // Navigate to the welcome page
         navigate('/welcome');
-      } else {
-        throw new Error('Invalid response from server');
+        
+      } catch (checkError) {
+        // If the error is about no account found or invalid password, show that error
+        if (checkError.message.includes('No account found') || 
+            checkError.message.includes('Invalid password')) {
+          throw checkError;
+        }
+        
+        // For other errors, try the API as a fallback
+        console.log('Local check failed, trying API...');
+        
+        // Try to connect to the API
+        const response = await fetch('https://7fmhg0usa0.execute-api.us-east-1.amazonaws.com/newstage/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email,
+            password,
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error('Invalid email or password. Please sign up first.');
+        }
+        
+        const data = await response.json();
+        
+        // Store the token and user info from the API
+        localStorage.setItem('token', data.token || 'api-token-' + Date.now());
+        localStorage.setItem('user', JSON.stringify(data.user || {
+          email: email,
+          name: email.split('@')[0],
+          role: 'user'
+        }));
+        
+        // Navigate to the welcome page
+        navigate('/welcome');
       }
     } catch (err) {
       console.error('Login error:', err);
