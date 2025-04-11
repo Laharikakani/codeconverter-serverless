@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Button,
   Card,
@@ -8,28 +8,55 @@ import {
   Text,
   View,
   TextField,
-  Alert
+  Alert,
+  useTheme,
+  Icon
 } from '@aws-amplify/ui-react';
+import { MdEmail, MdLock, MdArrowForward } from 'react-icons/md';
+import { signIn, getCurrentUser, signOut } from 'aws-amplify/auth';
 import '@aws-amplify/ui-react/styles.css';
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const { tokens } = useTheme();
 
-  const colors = {
-    background: '#f5f5f5',
-    primary: '#0078d4',
-    white: '#ffffff',
-    text: '#666666',
-    error: '#d13212'
-  };
+  // Check if user is already signed in and get email from location state
+  useEffect(() => {
+    const checkUser = async () => {
+      try {
+        // First, try to sign out any existing session
+        try {
+          await signOut();
+          // Clear any stored tokens or user data
+          localStorage.removeItem('user');
+          localStorage.removeItem('token');
+          sessionStorage.clear();
+        } catch (signOutError) {
+          console.log('Sign out error (can be ignored):', signOutError);
+        }
+
+        // Get email from location state if available
+        if (location.state && location.state.email) {
+          setEmail(location.state.email);
+        }
+      } catch (err) {
+        console.error('Error checking user:', err);
+      }
+    };
+    
+    checkUser();
+  }, [location]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
     setIsLoading(true);
 
     try {
@@ -43,79 +70,50 @@ const LoginPage = () => {
         throw new Error('Password must be at least 6 characters long');
       }
 
-      // Check if the user has signed up
-      try {
-        // First, check if we have any registered users in localStorage
-        const registeredUsers = JSON.parse(localStorage.getItem('registeredUsers') || '[]');
+      // Sign in with Cognito
+      const { isSignedIn, nextStep } = await signIn({
+        username: email,
+        password
+      });
+      
+      if (isSignedIn) {
+        setSuccess('Login successful! Redirecting...');
         
-        // Find the user with matching email
-        const user = registeredUsers.find(u => u.email === email);
-        
-        if (!user) {
-          throw new Error('No account found with this email. Please sign up first.');
+        // Get the current user and store token
+        try {
+          const user = await getCurrentUser();
+          if (user) {
+            // Store token in localStorage for protected routes
+            localStorage.setItem('token', 'authenticated');
+            
+            // Navigate to welcome page
+            navigate('/welcome', { replace: true });
+          } else {
+            throw new Error('Authentication failed');
+          }
+        } catch (authError) {
+          console.error('Auth verification error:', authError);
+          setError('Authentication failed. Please try again.');
         }
-        
-        // Check if the password matches
-        if (user.password !== password) {
-          throw new Error('Invalid password. Please try again.');
-        }
-        
-        // If we get here, the credentials are valid
-        console.log('Login successful for user:', email);
-        
-        // Store the token and user info
-        localStorage.setItem('token', 'user-token-' + Date.now());
-        localStorage.setItem('user', JSON.stringify({
-          email: user.email,
-          name: user.name,
-          role: 'user'
-        }));
-        
-        // Navigate to the welcome page
-        navigate('/welcome');
-        
-      } catch (checkError) {
-        // If the error is about no account found or invalid password, show that error
-        if (checkError.message.includes('No account found') || 
-            checkError.message.includes('Invalid password')) {
-          throw checkError;
-        }
-        
-        // For other errors, try the API as a fallback
-        console.log('Local check failed, trying API...');
-        
-        // Try to connect to the API
-        const response = await fetch('https://7fmhg0usa0.execute-api.us-east-1.amazonaws.com/newstage/login', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            email,
-            password,
-          }),
-        });
-        
-        if (!response.ok) {
-          throw new Error('Invalid email or password. Please sign up first.');
-        }
-        
-        const data = await response.json();
-        
-        // Store the token and user info from the API
-        localStorage.setItem('token', data.token || 'api-token-' + Date.now());
-        localStorage.setItem('user', JSON.stringify(data.user || {
-          email: email,
-          name: email.split('@')[0],
-          role: 'user'
-        }));
-        
-        // Navigate to the welcome page
-        navigate('/welcome');
+      } else if (nextStep.signInStep === 'CONFIRM_SIGN_IN_WITH_CODE') {
+        // Handle MFA if needed
+        navigate('/confirm-signin', { state: { email } });
       }
     } catch (err) {
       console.error('Login error:', err);
-      setError(err.message || 'Login failed. Please try again.');
+      
+      // Handle specific Cognito errors
+      if (err.name === 'UserNotConfirmedException') {
+        setError('Your account is not verified. Please check your email for the verification code.');
+        // Redirect to verify page
+        navigate('/verify', { state: { email } });
+      } else if (err.name === 'NotAuthorizedException') {
+        setError('Incorrect username or password.');
+      } else if (err.name === 'UserNotFoundException') {
+        setError('No account found with this email. Please sign up first.');
+      } else {
+        setError(err.message || 'Login failed. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -125,7 +123,7 @@ const LoginPage = () => {
     <View
       padding="2rem"
       minHeight="100vh"
-      backgroundColor={colors.background}
+      backgroundColor={tokens.colors.background.secondary}
       display="flex"
       justifyContent="center"
       alignItems="center"
@@ -135,18 +133,24 @@ const LoginPage = () => {
         padding="2rem"
         width="100%"
         maxWidth="400px"
-        backgroundColor={colors.white}
+        backgroundColor={tokens.colors.background.primary}
         borderRadius="12px"
       >
         <form onSubmit={handleLogin}>
           <Flex direction="column" gap="1.5rem">
-            <Heading level={1} color={colors.primary} textAlign="center">
+            <Heading level={1} color={tokens.colors.brand.primary[100]} textAlign="center">
               Login
             </Heading>
 
             {error && (
-              <Alert variation="error">
+              <Alert variation="error" isDismissible={true}>
                 {error}
+              </Alert>
+            )}
+
+            {success && (
+              <Alert variation="success" isDismissible={true}>
+                {success}
               </Alert>
             )}
 
@@ -157,6 +161,7 @@ const LoginPage = () => {
               onChange={(e) => setEmail(e.target.value)}
               required
               placeholder="Enter your email"
+              leftIcon={<Icon as={MdEmail} />}
             />
 
             <TextField
@@ -166,6 +171,7 @@ const LoginPage = () => {
               onChange={(e) => setPassword(e.target.value)}
               required
               placeholder="Enter your password"
+              leftIcon={<Icon as={MdLock} />}
             />
 
             <Button
@@ -173,9 +179,8 @@ const LoginPage = () => {
               variation="primary"
               isLoading={isLoading}
               loadingText="Logging in..."
-              backgroundColor={colors.primary}
-              color={colors.white}
               width="100%"
+              rightIcon={<Icon as={MdArrowForward} />}
             >
               Login
             </Button>
@@ -184,7 +189,7 @@ const LoginPage = () => {
               <Button
                 variation="link"
                 onClick={() => navigate('/signup')}
-                color={colors.primary}
+                color={tokens.colors.brand.primary[100]}
               >
                 Create Account
               </Button>

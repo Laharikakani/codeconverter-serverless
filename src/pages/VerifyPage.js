@@ -14,6 +14,7 @@ import {
   Icon
 } from '@aws-amplify/ui-react';
 import { MdEmail, MdLock, MdArrowForward, MdRefresh } from 'react-icons/md';
+import { confirmSignUp, resendSignUpCode, signOut } from 'aws-amplify/auth';
 import '@aws-amplify/ui-react/styles.css';
 
 const VerifyPage = () => {
@@ -62,32 +63,40 @@ const VerifyPage = () => {
     setSuccess('');
     
     try {
-      const response = await fetch('https://1m1rplv9ze.execute-api.us-east-1.amazonaws.com/newstage/verify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          code: verificationCode,
-        }),
+      // Confirm sign up with Cognito
+      const { isSignUpComplete } = await confirmSignUp({
+        username: email,
+        confirmationCode: verificationCode
       });
       
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Verification failed');
+      // Sign out any existing session
+      try {
+        await signOut();
+        // Clear any stored tokens or user data
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+        sessionStorage.clear();
+      } catch (signOutError) {
+        console.log('Sign out error (can be ignored):', signOutError);
       }
       
       setSuccess('Email verified successfully! Redirecting to login...');
       
       // Redirect to login after a short delay
       setTimeout(() => {
-        navigate('/login');
+        navigate('/login', { state: { email } });
       }, 2000);
     } catch (error) {
       console.error('Verification error:', error);
-      setError(error.message || 'Verification failed. Please try again.');
+      
+      // Handle specific Cognito errors
+      if (error.name === 'CodeMismatchException') {
+        setError('Invalid verification code. Please check and try again.');
+      } else if (error.name === 'ExpiredCodeException') {
+        setError('Verification code has expired. Please request a new one.');
+      } else {
+        setError(error.message || 'Verification failed. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -99,22 +108,10 @@ const VerifyPage = () => {
     setSuccess('');
     
     try {
-      const response = await fetch('https://7fmhg0usa0.execute-api.us-east-1.amazonaws.com/newstage/signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          resend: true,
-        }),
+      // Resend confirmation code with Cognito
+      const { isSignUpComplete } = await resendSignUpCode({
+        username: email
       });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to resend code');
-      }
       
       setSuccess('Verification code resent successfully! Please check your email.');
       
@@ -123,7 +120,13 @@ const VerifyPage = () => {
       setCountdown(60);
     } catch (error) {
       console.error('Resend code error:', error);
-      setError(error.message || 'Failed to resend code. Please try again.');
+      
+      // Handle specific Cognito errors
+      if (error.name === 'LimitExceededException') {
+        setError('Too many attempts. Please try again later.');
+      } else {
+        setError(error.message || 'Failed to resend code. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }

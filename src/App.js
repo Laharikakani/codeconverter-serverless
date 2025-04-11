@@ -8,6 +8,7 @@ import CodeEditorPage from './pages/CodeEditorPage';
 import HomePage from './pages/HomePage';
 import NotFound from './pages/NotFound';
 import VerifyPage from './pages/VerifyPage';
+import { theme } from './theme';
 import './styles/App.css';
 
 // Protected Route component
@@ -15,15 +16,17 @@ const ProtectedRoute = ({ children }) => {
   const token = localStorage.getItem('token');
   
   if (!token) {
+    // Redirect to login if no token is found
     return <Navigate to="/login" replace />;
   }
   
+  // Render the protected component if token exists
   return children;
 };
 
 function App() {
   return (
-    <ThemeProvider>
+    <ThemeProvider theme={theme}>
       <Router>
         <div className="App">
           <Routes>

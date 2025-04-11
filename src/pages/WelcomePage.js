@@ -8,6 +8,7 @@ import {
   Text,
   View
 } from '@aws-amplify/ui-react';
+import { signOut } from 'aws-amplify/auth';
 import '@aws-amplify/ui-react/styles.css';
 
 const WelcomePage = () => {
@@ -24,9 +25,24 @@ const WelcomePage = () => {
     navigate('/editor');
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    navigate('/');
+  const handleLogout = async () => {
+    try {
+      // Sign out from Cognito
+      await signOut();
+      
+      // Clear all local storage and session storage
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      // Navigate to home page
+      navigate('/', { replace: true });
+    } catch (error) {
+      console.error('Error signing out:', error);
+      // Even if there's an error, clear local data and redirect
+      localStorage.clear();
+      sessionStorage.clear();
+      navigate('/', { replace: true });
+    }
   };
 
   return (

@@ -1,129 +1,120 @@
 import React, { useState } from 'react';
 import { FaFileUpload } from 'react-icons/fa';
+import { Button, Text, View } from '@aws-amplify/ui-react';
+import '@aws-amplify/ui-react/styles.css';
 
-const FileUpload = ({ onFileContent, onLanguageDetected, isLoading: externalIsLoading }) => {
+const FileUpload = ({ onFileContent, onLanguageDetected, isLoading }) => {
     const [error, setError] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
     const [fileName, setFileName] = useState('');
 
-    // List of supported file extensions with their corresponding languages
     const supportedExtensions = {
-        '.py': 'python',
-        '.java': 'java',
-        '.js': 'javascript',
-        '.jsx': 'javascript',
-        '.ts': 'javascript',
-        '.tsx': 'javascript',
-        '.cs': 'csharp',
-        '.rs': 'rust',
-        '.php': 'php',
-        '.rb': 'ruby',
-        '.swift': 'swift',
-        '.cpp': 'csharp',
-        '.c': 'csharp',
-        '.h': 'csharp',
-        '.hpp': 'csharp',
-        '.kt': 'javascript',
-        '.go': 'javascript'
+        'js': 'javascript',
+        'jsx': 'javascript',
+        'ts': 'typescript',
+        'tsx': 'typescript',
+        'py': 'python',
+        'java': 'java',
+        'cpp': 'cpp',
+        'c': 'c',
+        'cs': 'csharp',
+        'php': 'php',
+        'rb': 'ruby',
+        'go': 'go',
+        'rs': 'rust',
+        'swift': 'swift',
+        'kt': 'kotlin',
+        'scala': 'scala',
+        'html': 'html',
+        'css': 'css',
+        'sql': 'sql'
     };
 
     const handleFileUpload = async (event) => {
         const file = event.target.files[0];
         if (!file) return;
 
-        // Get file extension
-        const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
-        
-        // Check if file extension is supported
-        if (!Object.keys(supportedExtensions).includes(fileExtension)) {
-            setError(`Unsupported file type. Please upload a code file with one of these extensions: ${Object.keys(supportedExtensions).join(', ')}`);
+        const extension = file.name.split('.').pop().toLowerCase();
+        if (!supportedExtensions[extension]) {
+            setError('Unsupported file type. Please upload a supported programming language file.');
             return;
         }
 
         setFileName(file.name);
-        setIsLoading(true);
         setError('');
 
         try {
-            // Read the file content
-            const fileContent = await file.text();
-            
-            // Pass the file content to the parent component
-            onFileContent(fileContent);
-
-            // Detect language based on file extension and notify parent component
-            const detectedLanguage = supportedExtensions[fileExtension];
-            if (detectedLanguage && onLanguageDetected) {
-                onLanguageDetected(detectedLanguage);
-            }
+            const content = await file.text();
+            onFileContent(content);
+            onLanguageDetected(supportedExtensions[extension]);
         } catch (err) {
-            console.error('Upload error:', err);
-            setError(`Error uploading file: ${err.message}`);
-        } finally {
-            setIsLoading(false);
+            setError('Error reading file. Please try again.');
         }
     };
 
     return (
-        <div style={{ 
-            display: 'block', 
-            width: '100%',
-            marginBottom: '10px'
-        }}>
+        <View style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <input
                 type="file"
-                accept={Object.keys(supportedExtensions).join(',')}
                 onChange={handleFileUpload}
+                accept={Object.keys(supportedExtensions).map(ext => `.${ext}`).join(',')}
                 style={{ display: 'none' }}
                 id="file-upload"
+                disabled={isLoading}
             />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <button
-                    onClick={() => document.getElementById('file-upload').click()}
-                    disabled={isLoading || externalIsLoading}
+            <label htmlFor="file-upload">
+                <Button
+                    as="span"
+                    size="small"
+                    variation="primary"
+                    isLoading={isLoading}
                     style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '8px',
-                        padding: '8px 16px',
                         backgroundColor: '#0078d4',
-                        color: 'white',
                         border: 'none',
-                        borderRadius: '8px',
+                        borderRadius: '6px',
+                        padding: '8px 16px',
                         cursor: 'pointer',
-                        fontWeight: '600',
-                        fontSize: '14px',
-                        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.15)',
-                        position: 'relative',
-                        overflow: 'hidden',
-                        userSelect: 'none',
-                        zIndex: 10,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
                         transition: 'all 0.2s ease',
-                        opacity: isLoading || externalIsLoading ? 0.7 : 1
+                        ':hover': {
+                            backgroundColor: '#106ebe'
+                        }
                     }}
                 >
-                    <FaFileUpload style={{ fontSize: '16px' }} />
-                    <span>Upload</span>
-                </button>
-                {fileName && (
-                    <div style={{ fontSize: '14px', color: '#666' }}>
-                        {fileName}
-                    </div>
-                )}
-                {error && (
-                    <div style={{ 
-                        padding: '8px 12px', 
-                        backgroundColor: '#ffebee', 
-                        color: '#d32f2f', 
-                        borderRadius: '4px',
-                        fontSize: '14px'
+                    <FaFileUpload size={16} />
+                    <Text style={{ 
+                        fontFamily: "'Space Grotesk', 'Poppins', sans-serif",
+                        fontSize: '14px',
+                        fontWeight: '500'
                     }}>
-                        {error}
-                    </div>
-                )}
-            </div>
-        </div>
+                        Upload File
+                    </Text>
+                </Button>
+            </label>
+            {error && (
+                <Text style={{ 
+                    color: '#d13438',
+                    fontSize: '14px',
+                    marginTop: '4px'
+                }}>
+                    {error}
+                </Text>
+            )}
+            {fileName && !error && (
+                <Text style={{ 
+                    color: '#107c10',
+                    fontSize: '14px',
+                    marginTop: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                }}>
+                    <FaFileUpload size={14} />
+                    {fileName}
+                </Text>
+            )}
+        </View>
     );
 };
 

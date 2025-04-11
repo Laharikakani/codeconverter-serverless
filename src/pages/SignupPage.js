@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Button,
@@ -15,6 +15,7 @@ import {
 } from '@aws-amplify/ui-react';
 import { MdPerson, MdEmail, MdLock, MdArrowForward } from 'react-icons/md';
 import { FaGoogle, FaGithub } from 'react-icons/fa';
+import { signUp, getCurrentUser, signOut } from 'aws-amplify/auth';
 import '@aws-amplify/ui-react/styles.css';
 
 const SignupPage = () => {
@@ -27,6 +28,28 @@ const SignupPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { tokens } = useTheme();
+
+  // Check if user is already signed in
+  useEffect(() => {
+    const checkUser = async () => {
+      try {
+        // First, try to sign out any existing session
+        try {
+          await signOut();
+          // Clear any stored tokens or user data
+          localStorage.removeItem('user');
+          localStorage.removeItem('token');
+          sessionStorage.clear();
+        } catch (signOutError) {
+          console.log('Sign out error (can be ignored):', signOutError);
+        }
+      } catch (err) {
+        console.error('Error checking user:', err);
+      }
+    };
+    
+    checkUser();
+  }, []);
 
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -46,43 +69,28 @@ const SignupPage = () => {
     setSuccess('');
     
     try {
-      // First try to connect to the API
-      const response = await fetch('https://7fmhg0usa0.execute-api.us-east-1.amazonaws.com/newstage/signup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name,
-          email,
-          password,
-        }),
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.message || 'Signup failed. Please try again.');
-      }
-      
-      // Only store in localStorage if API call succeeds
-      const registeredUsers = JSON.parse(localStorage.getItem('registeredUsers') || '[]');
-      
-      // Check if user already exists
-      if (registeredUsers.some(user => user.email === email)) {
-        throw new Error('An account with this email already exists. Please login instead.');
-      }
-      
-      // Add the new user to the list
-      registeredUsers.push({
-        name,
-        email,
+      // Sign up with Cognito
+      const { isSignUpComplete, userId } = await signUp({
+        username: email,
         password,
-        createdAt: new Date().toISOString()
+        options: {
+          userAttributes: {
+            name,
+            email,
+          }
+        }
       });
       
-      // Save the updated list
-      localStorage.setItem('registeredUsers', JSON.stringify(registeredUsers));
+      // Sign out any existing session
+      try {
+        await signOut();
+        // Clear any stored tokens or user data
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+        sessionStorage.clear();
+      } catch (signOutError) {
+        console.log('Sign out error (can be ignored):', signOutError);
+      }
       
       setSuccess('Account created successfully! A verification code has been sent to your email.');
       
@@ -92,7 +100,15 @@ const SignupPage = () => {
       }, 2000);
     } catch (error) {
       console.error('Signup error:', error);
-      setError(error.message || 'Signup failed. Please try again.');
+      
+      // Handle specific Cognito errors
+      if (error.name === 'UsernameExistsException') {
+        setError('An account with this email already exists. Please login instead.');
+      } else if (error.name === 'InvalidPasswordException') {
+        setError('Password does not meet requirements. It must be at least 8 characters long and contain uppercase, lowercase, numbers, and special characters.');
+      } else {
+        setError(error.message || 'Signup failed. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
