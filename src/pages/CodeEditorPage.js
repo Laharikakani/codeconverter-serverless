@@ -23,19 +23,7 @@ import { FaCode, FaExchangeAlt, FaCopy, FaMicrophone, FaStop, FaPlay, FaPause, F
 import FileUpload from '../components/FileUpload';
 
 const CodeEditorPage = () => {
-  const [sourceCode, setSourceCode] = useState(`public class Factorial {
-    public static long factorial(int n) {
-        if (n == 0 || n == 1) {
-            return 1;
-        } else {
-            return n * factorial(n - 1);
-        }
-    }
-
-    public static void main(String[] args) {
-        System.out.println(factorial(5));
-    }
-}`);
+  const [sourceCode, setSourceCode] = useState('');
   const [sourceLanguage, setSourceLanguage] = useState('javascript');
   const [targetLanguage, setTargetLanguage] = useState('python');
   const [convertedCode, setConvertedCode] = useState('');
@@ -43,7 +31,7 @@ const CodeEditorPage = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [copySuccess, setCopySuccess] = useState('');
-  const [rawResponse, setRawResponse] = useState('');
+  const [rawResponse, setRawResponse] = useState(null);
   const [showRawResponse, setShowRawResponse] = useState(false);
   const [supportedLanguages, setSupportedLanguages] = useState([
     'python', 'javascript', 'java', 'csharp', 
@@ -51,6 +39,33 @@ const CodeEditorPage = () => {
   ]);
   const navigate = useNavigate();
   const { tokens } = useTheme();
+
+  // Add language validation patterns
+  const languagePatterns = {
+    javascript: /function|const|let|var|if|else|for|while|return|class|import|export|console\.log/,
+    python: /def|class|import|from|if|else|for|while|return|print|try|except/,
+    java: /public|private|class|void|int|String|System\.out\.println|import/,
+    cpp: /#include|using namespace|int main|cout|cin|class|struct/,
+    csharp: /using|namespace|class|public|private|Console\.WriteLine|void|int/,
+    php: /<?php|echo|function|class|if|else|for|while|return/,
+    ruby: /def|class|module|require|if|else|for|while|puts/,
+    swift: /import|class|struct|func|var|let|if|else|for|while|print/,
+    kotlin: /fun|class|import|if|else|for|while|println|val|var/,
+    go: /package|import|func|if|else|for|range|fmt\.Println/,
+    rust: /fn|pub|struct|impl|if|else|for|while|println!/,
+    typescript: /interface|type|function|const|let|var|if|else|for|while|return|class|import|export/,
+    sql: /SELECT|INSERT|UPDATE|DELETE|FROM|WHERE|JOIN|GROUP BY|ORDER BY/,
+    html: /<html|<head|<body|<div|<span|<p|<h1|<a|<img/,
+    css: /{.*}|@media|@keyframes|:hover|:active|:focus|margin|padding|color|background/
+  };
+
+  // Add function to validate code against selected language
+  const validateCodeLanguage = (code, language) => {
+    if (!code.trim()) return true; // Empty code is considered valid
+    const pattern = languagePatterns[language];
+    if (!pattern) return true; // If no pattern exists for language, consider valid
+    return pattern.test(code);
+  };
 
   useEffect(() => {
     // Check if user is logged in
@@ -61,34 +76,38 @@ const CodeEditorPage = () => {
   }, [navigate]);
 
   const handleConvert = async () => {
-    if (!sourceCode.trim()) {
-      setError('Please enter some code to convert');
-      setSuccess('');
-      return;
-    }
-
-    // Check if source and target languages are the same
-    if (sourceLanguage === targetLanguage) {
-      setError('Source and target languages are the same. No conversion needed.');
-      setSuccess('');
-      return;
-    }
-
-    // Check if the code matches the selected source language
-    if (!isCodeMatchingLanguage(sourceCode, sourceLanguage)) {
-      setError(`The code you provided doesn't appear to be valid ${sourceLanguage} code. Please either change the source language or provide code in the selected language.`);
-      setSuccess('');
-      return;
-    }
-
-    setIsLoading(true);
-    setError('');
-    setSuccess('');
-    setCopySuccess('');
-    setRawResponse('');
-    setShowRawResponse(false);
-    
     try {
+      setError('');
+      setSuccess('');
+      setRawResponse(null);
+      setIsLoading(true);
+
+      // Validate code language
+      if (!validateCodeLanguage(sourceCode, sourceLanguage)) {
+        setError(`The code doesn't appear to be valid ${sourceLanguage.toUpperCase()} code. Please check your code or select the correct language.`);
+        setIsLoading(false);
+        return;
+      }
+
+      // Check if source and target languages are the same
+      if (sourceLanguage === targetLanguage) {
+        setError('Source and target languages are the same. No conversion needed.');
+        setSuccess('');
+        setIsLoading(false);
+        return;
+      }
+
+      // Check if the code matches the selected source language
+      if (!isCodeMatchingLanguage(sourceCode, sourceLanguage)) {
+        setError(`The code you provided doesn't appear to be valid ${sourceLanguage} code. Please either change the source language or provide code in the selected language.`);
+        setSuccess('');
+        setIsLoading(false);
+        return;
+      }
+
+      setCopySuccess('');
+      setShowRawResponse(false);
+      
       const token = localStorage.getItem('token');
       console.log('Sending request to API with:', {
         sourceCode: sourceCode.substring(0, 100) + (sourceCode.length > 100 ? '...' : ''),
@@ -109,7 +128,7 @@ const CodeEditorPage = () => {
       
       // Create an AbortController for timeout handling
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // Increase timeout to 60 seconds
       
       const response = await fetch('https://96z52auad8.execute-api.us-east-1.amazonaws.com/newstage/codeconverter', {
         method: 'POST',
@@ -137,7 +156,7 @@ const CodeEditorPage = () => {
           throw new Error('API Error: The request body format is incorrect. Please try again.');
         }
         
-        throw new Error(errorData.message + 'Failed to convert code');
+        throw new Error(errorData.message || 'Failed to convert code');
       }
       
       const data = await response.json();
@@ -198,32 +217,98 @@ const CodeEditorPage = () => {
         
         // Try to extract any text content that might be the code
         const responseText = JSON.stringify(data);
-        if (responseText.includes('')) {
-          // Try to extract code from markdown code blocks
-          const codeMatch = responseText.match(/[\s\S]*?/g);
+        
+        // First try to extract code from markdown code blocks
+        if (responseText.includes('```')) {
+          const codeMatch = responseText.match(/```[\s\S]*?```/g);
           if (codeMatch && codeMatch.length > 0) {
             // Extract the code from the first code block
-            const extractedCode = codeMatch[0].replace(/[\w]*\n/, '').replace(/\n```$/, '');
+            const extractedCode = codeMatch[0].replace(/```[\w]*\n/, '').replace(/\n```$/, '');
             console.log('Extracted code from markdown code block');
             const formattedCode = formatCodeWithLineBreaks(extractedCode);
             setConvertedCode(formattedCode);
             setSuccess('Code converted successfully!');
-          } else {
-            setShowRawResponse(true);
-            throw new Error('Failed to get converted code from API response');
+            return; // Exit the function after setting the code
           }
-        } else {
-          setShowRawResponse(true);
-          throw new Error('Failed to get converted code from API response');
         }
+        
+        // Try to extract any code-like content from the response
+        const codePattern = /"([^"]*)"|'([^']*)'/g;
+        const matches = [...responseText.matchAll(codePattern)];
+        
+        if (matches.length > 0) {
+          // Find the longest match that looks like code
+          let longestMatch = '';
+          for (const match of matches) {
+            const content = match[1] || match[2] || '';
+            if (content.length > longestMatch.length && 
+                (content.includes('function') || 
+                 content.includes('class') || 
+                 content.includes('import') || 
+                 content.includes('export') || 
+                 content.includes('return') || 
+                 content.includes('const') || 
+                 content.includes('let') || 
+                 content.includes('var') ||
+                 content.includes('namespace') ||
+                 content.includes('using') ||
+                 content.includes('public') ||
+                 content.includes('private') ||
+                 content.includes('static') ||
+                 content.includes('void') ||
+                 content.includes('int') ||
+                 content.includes('string') ||
+                 content.includes('def') ||
+                 content.includes('print') ||
+                 content.includes('import') ||
+                 content.includes('from'))) {
+              longestMatch = content;
+            }
+          }
+          
+          if (longestMatch) {
+            console.log('Extracted code from response text');
+            const formattedCode = formatCodeWithLineBreaks(longestMatch);
+            setConvertedCode(formattedCode);
+            setSuccess('Code converted successfully!');
+            return; // Exit the function after setting the code
+          }
+        }
+        
+        // If we still can't find code, try to extract any string that looks like code
+        const stringPattern = /"([^"]{50,})"|'([^']{50,})'/g;
+        const stringMatches = [...responseText.matchAll(stringPattern)];
+        
+        if (stringMatches.length > 0) {
+          // Find the longest match
+          let longestMatch = '';
+          for (const match of stringMatches) {
+            const content = match[1] || match[2] || '';
+            if (content.length > longestMatch.length) {
+              longestMatch = content;
+            }
+          }
+          
+          if (longestMatch) {
+            console.log('Extracted potential code from response text');
+            const formattedCode = formatCodeWithLineBreaks(longestMatch);
+            setConvertedCode(formattedCode);
+            setSuccess('Code converted successfully!');
+            return; // Exit the function after setting the code
+          }
+        }
+        
+        // If all extraction attempts fail, show the raw response
+        setShowRawResponse(true);
+        throw new Error('Failed to get converted code from API response');
       }
     } catch (error) {
       console.error('Error converting code:', error);
       // Handle timeout errors specifically
       if (error.name === 'AbortError') {
-        setError('Request timed out. The server is taking too long to respond. Please try again later or with a smaller code snippet.');
+        setError('Request timed out. The server is taking too long to respond. This is common for complex code conversions like Java to JavaScript. Please try again with a smaller code snippet or split your code into smaller parts.');
       } else {
-        setError(error.message + 'Failed to convert code. Please try again.');
+        setError(error.message || 'Failed to convert code. Please try again.');
       }
     } finally {
       setIsLoading(false);
@@ -355,6 +440,9 @@ const CodeEditorPage = () => {
       
       // Remove the <|code_end|> marker if it exists
       formattedCode = formattedCode.replace(/<\|code_end\|>.*$/, '');
+      
+      // Remove any trailing blank lines at the end of the code
+      formattedCode = formattedCode.replace(/\n+$/, '');
       
       return removeLanguageName(formattedCode);
     }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   Button,
   Card,
@@ -10,13 +10,11 @@ import {
   View,
   useTheme,
   Alert,
-  Icon,
-  Divider
+  Icon
 } from '@aws-amplify/ui-react';
-import { MdPerson, MdEmail, MdLock, MdArrowForward } from 'react-icons/md';
-import { FaGoogle, FaGithub } from 'react-icons/fa';
-import { signUp, getCurrentUser, signOut } from 'aws-amplify/auth';
 import '@aws-amplify/ui-react/styles.css';
+import { FaUserPlus, FaEnvelope, FaLock, FaEye, FaEyeSlash, FaUser } from 'react-icons/fa';
+import { signUp, signOut } from 'aws-amplify/auth';
 
 const SignupPage = () => {
   const [name, setName] = useState('');
@@ -25,89 +23,81 @@ const SignupPage = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { tokens } = useTheme();
 
-  // Check if user is already signed in
   useEffect(() => {
+    // Sign out any existing session
     const checkUser = async () => {
       try {
-        // First, try to sign out any existing session
-        try {
-          await signOut();
-          // Clear any stored tokens or user data
-          localStorage.removeItem('user');
-          localStorage.removeItem('token');
-          sessionStorage.clear();
-        } catch (signOutError) {
-          console.log('Sign out error (can be ignored):', signOutError);
-        }
-      } catch (err) {
-        console.error('Error checking user:', err);
+        await signOut();
+        localStorage.removeItem('token');
+        sessionStorage.removeItem('user');
+      } catch (error) {
+        console.log('No user signed in');
       }
     };
-    
     checkUser();
   }, []);
 
   const handleSignup = async (e) => {
     e.preventDefault();
-    
-    if (!name || !email || !password || !confirmPassword) {
-      setError('Please fill in all fields');
-      return;
-    }
-    
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-    
-    setIsLoading(true);
     setError('');
     setSuccess('');
-    
+    setIsLoading(true);
+
+    // Validate input fields
+    if (!name || !email || !password || !confirmPassword) {
+      setError('Please fill in all fields');
+      setIsLoading(false);
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      setIsLoading(false);
+      return;
+    }
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long');
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      // Sign up with Cognito
-      const { isSignUpComplete, userId } = await signUp({
+      // Sign out any existing session before signing up
+      await signOut();
+      localStorage.removeItem('token');
+      sessionStorage.removeItem('user');
+
+      const { isSignUpComplete, nextStep } = await signUp({
         username: email,
         password,
         options: {
           userAttributes: {
             name,
             email,
-          }
-        }
+          },
+        },
       });
-      
-      // Sign out any existing session
-      try {
-        await signOut();
-        // Clear any stored tokens or user data
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
-        sessionStorage.clear();
-      } catch (signOutError) {
-        console.log('Sign out error (can be ignored):', signOutError);
+
+      if (isSignUpComplete && nextStep.signUpStep === 'CONFIRM_SIGN_UP') {
+        setSuccess('Account created successfully! Please check your email for verification code.');
+        setTimeout(() => {
+          navigate('/verify', { state: { email } });
+        }, 2000);
       }
-      
-      setSuccess('Account created successfully! A verification code has been sent to your email.');
-      
-      // Redirect to the verify page with the email after a short delay
-      setTimeout(() => {
-        navigate('/verify', { state: { email } });
-      }, 2000);
     } catch (error) {
-      console.error('Signup error:', error);
-      
-      // Handle specific Cognito errors
-      if (error.name === 'UsernameExistsException') {
-        setError('An account with this email already exists. Please login instead.');
-      } else if (error.name === 'InvalidPasswordException') {
-        setError('Password does not meet requirements. It must be at least 8 characters long and contain uppercase, lowercase, numbers, and special characters.');
+      console.error('Error signing up:', error);
+      if (error.message.includes('User already exists')) {
+        setError('An account with this email already exists');
+      } else if (error.message.includes('Password did not conform with policy')) {
+        setError('Password must contain at least 8 characters, including uppercase, lowercase, numbers, and special characters');
       } else {
-        setError(error.message || 'Signup failed. Please try again.');
+        setError(error.message || 'Error signing up. Please try again.');
       }
     } finally {
       setIsLoading(false);
@@ -116,152 +106,290 @@ const SignupPage = () => {
 
   return (
     <View
-      padding="2rem"
+      padding="1rem"
+      minHeight="100vh"
+      backgroundColor={tokens.colors.background.secondary}
       display="flex"
       justifyContent="center"
       alignItems="center"
-      minHeight="100vh"
-      backgroundColor={tokens.colors.background.secondary}
     >
-      <Card 
-        variation="elevated" 
-        padding="2.5rem" 
-        width="100%" 
-        maxWidth="500px"
-        borderRadius="16px"
-        boxShadow="0 8px 24px rgba(0, 0, 0, 0.12)"
+      <Card
+        variation="elevated"
+        padding="2rem"
+        width="100%"
+        maxWidth="600px"
+        style={{
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+          borderRadius: '12px',
+        }}
       >
-        <Flex direction="column" gap="2rem">
+        <Flex direction="column" gap="1.5rem">
           <Flex direction="column" alignItems="center" gap="0.5rem">
-            <Heading level={1} textAlign="center" fontSize="2.5rem" fontWeight="700">
+            <View
+              width="64px"
+              height="64px"
+              backgroundColor="#0078d4"
+              borderRadius="16px"
+              display="flex"
+              justifyContent="center"
+              alignItems="center"
+              style={{
+                boxShadow: '0 4px 8px rgba(0, 120, 212, 0.3)',
+              }}
+            >
+              <FaUserPlus size={32} color="white" />
+            </View>
+            <Heading
+              level={1}
+              style={{
+                background: 'linear-gradient(45deg, #0078d4, #00b7ff)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                fontSize: '2.2rem',
+                fontWeight: '800',
+                letterSpacing: '0.5px',
+                textShadow: '2px 2px 4px rgba(0, 0, 0, 0.1)',
+                fontFamily: "'Poppins', 'Segoe UI', sans-serif",
+                textAlign: 'center',
+              }}
+            >
               Create Account
             </Heading>
-            <Text textAlign="center" color={tokens.colors.font.secondary}>
-              Join our community of developers
+            <Text
+              style={{
+                color: tokens.colors.font.secondary,
+                fontSize: '1rem',
+                textAlign: 'center',
+                fontFamily: "'Poppins', 'Segoe UI', sans-serif",
+              }}
+            >
+              Join our code conversion platform
             </Text>
           </Flex>
-          
+
           {error && (
-            <Alert variation="error" isDismissible={true} borderRadius="8px">
-              {error}
+            <Alert variation="error" isDismissible={true} style={{ borderRadius: '8px' }}>
+              <Text fontWeight="bold">{error}</Text>
             </Alert>
           )}
-          
+
           {success && (
-            <Alert variation="success" isDismissible={true} borderRadius="8px">
-              {success}
+            <Alert variation="success" isDismissible={true} style={{ borderRadius: '8px' }}>
+              <Text fontWeight="bold">{success}</Text>
             </Alert>
           )}
-          
+
           <form onSubmit={handleSignup}>
-            <Flex direction="column" gap="1.5rem">
-              <TextField
-                label="Name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Enter your name"
-                required
-                size="large"
-                borderRadius="8px"
-                leftIcon={<Icon as={MdPerson} />}
-              />
-              
-              <TextField
-                label="Email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                required
-                size="large"
-                borderRadius="8px"
-                leftIcon={<Icon as={MdEmail} />}
-              />
-              
-              <TextField
-                label="Password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                required
-                size="large"
-                borderRadius="8px"
-                leftIcon={<Icon as={MdLock} />}
-              />
-              
-              <TextField
-                label="Confirm Password"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm your password"
-                required
-                size="large"
-                borderRadius="8px"
-                leftIcon={<Icon as={MdLock} />}
-              />
-              
+            <Flex direction="column" gap="0.75rem">
+              <View>
+                <Text
+                  style={{
+                    fontSize: '1.1rem',
+                    fontWeight: '600',
+                    color: '#0078d4',
+                    fontFamily: "'Poppins', 'Segoe UI', sans-serif",
+                    marginBottom: '0.25rem',
+                    display: 'block',
+                    letterSpacing: '0.5px',
+                  }}
+                >
+                  Full Name
+                </Text>
+                <TextField
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="John Doe"
+                  size="default"
+                  backgroundColor="white"
+                  borderColor="#0078d4"
+                  borderRadius="8px"
+                  padding="0.5rem"
+                  style={{ 
+                    fontFamily: "'Poppins', 'Segoe UI', sans-serif",
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+                    transition: 'all 0.2s ease',
+                    ':focus': {
+                      borderColor: '#005a9e',
+                      boxShadow: '0 0 0 2px rgba(0, 120, 212, 0.2)',
+                    }
+                  }}
+                  startIcon={<FaUser color="#0078d4" size={16} />}
+                />
+              </View>
+
+              <View>
+                <Text
+                  style={{
+                    fontSize: '1.1rem',
+                    fontWeight: '600',
+                    color: '#0078d4',
+                    fontFamily: "'Poppins', 'Segoe UI', sans-serif",
+                    marginBottom: '0.25rem',
+                    display: 'block',
+                    letterSpacing: '0.5px',
+                  }}
+                >
+                  Email Address
+                </Text>
+                <TextField
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  size="default"
+                  backgroundColor="white"
+                  borderColor="#0078d4"
+                  borderRadius="8px"
+                  padding="0.5rem"
+                  style={{ 
+                    fontFamily: "'Poppins', 'Segoe UI', sans-serif",
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+                    transition: 'all 0.2s ease',
+                    ':focus': {
+                      borderColor: '#005a9e',
+                      boxShadow: '0 0 0 2px rgba(0, 120, 212, 0.2)',
+                    }
+                  }}
+                  startIcon={<FaEnvelope color="#0078d4" size={16} />}
+                />
+              </View>
+
+              <View position="relative">
+                <Text
+                  style={{
+                    fontSize: '1.1rem',
+                    fontWeight: '600',
+                    color: '#0078d4',
+                    fontFamily: "'Poppins', 'Segoe UI', sans-serif",
+                    marginBottom: '0.25rem',
+                    display: 'block',
+                    letterSpacing: '0.5px',
+                  }}
+                >
+                  Password
+                </Text>
+                <TextField
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Create a password"
+                  size="default"
+                  backgroundColor="white"
+                  borderColor="#0078d4"
+                  borderRadius="8px"
+                  padding="0.5rem"
+                  style={{ 
+                    fontFamily: "'Poppins', 'Segoe UI', sans-serif",
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+                    transition: 'all 0.2s ease',
+                    ':focus': {
+                      borderColor: '#005a9e',
+                      boxShadow: '0 0 0 2px rgba(0, 120, 212, 0.2)',
+                    }
+                  }}
+                  startIcon={<FaLock color="#0078d4" size={16} />}
+                />
+                <Button
+                  variation="link"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: '#0078d4',
+                  }}
+                >
+                  {showPassword ? <FaEyeSlash /> : <FaEye />}
+                </Button>
+              </View>
+
+              <View position="relative">
+                <Text
+                  style={{
+                    fontSize: '1.1rem',
+                    fontWeight: '600',
+                    color: '#0078d4',
+                    fontFamily: "'Poppins', 'Segoe UI', sans-serif",
+                    marginBottom: '0.25rem',
+                    display: 'block',
+                    letterSpacing: '0.5px',
+                  }}
+                >
+                  Confirm Password
+                </Text>
+                <TextField
+                  type={showPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm your password"
+                  size="default"
+                  backgroundColor="white"
+                  borderColor="#0078d4"
+                  borderRadius="8px"
+                  padding="0.5rem"
+                  style={{ 
+                    fontFamily: "'Poppins', 'Segoe UI', sans-serif",
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.05)',
+                    transition: 'all 0.2s ease',
+                    ':focus': {
+                      borderColor: '#005a9e',
+                      boxShadow: '0 0 0 2px rgba(0, 120, 212, 0.2)',
+                    }
+                  }}
+                  startIcon={<FaLock color="#0078d4" size={16} />}
+                />
+              </View>
+
               <Button
                 type="submit"
                 variation="primary"
-                size="large"
                 isLoading={isLoading}
-                loadingText="Creating account..."
-                width="100%"
-                borderRadius="8px"
-                height="48px"
-                fontSize="1.1rem"
-                fontWeight="600"
-                rightIcon={<Icon as={MdArrowForward} />}
+                loadingText="Creating Account..."
+                backgroundColor="#0078d4"
+                color="white"
+                size="default"
+                style={{
+                  padding: '0.5rem 2rem',
+                  fontSize: '1rem',
+                  fontWeight: 'bold',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  boxShadow: '0 4px 8px rgba(0, 120, 212, 0.3)',
+                  transition: 'all 0.3s ease',
+                  ':hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: '0 6px 12px rgba(0, 120, 212, 0.4)',
+                  },
+                }}
               >
-                Sign Up
+                <FaUserPlus /> Create Account
               </Button>
             </Flex>
           </form>
-          
-          <Divider />
-          
-          <Flex direction="column" gap="1rem">
-            <Text textAlign="center" color={tokens.colors.font.secondary}>
-              Or sign up with
+
+          <Flex justifyContent="center" alignItems="center" gap="0.5rem">
+            <Text style={{ color: tokens.colors.font.secondary, fontFamily: "'Poppins', 'Segoe UI', sans-serif" }}>
+              Already have an account?
             </Text>
-            <Flex gap="1rem" justifyContent="center">
-              <Button
-                variation="outline"
-                size="large"
-                borderRadius="8px"
-                leftIcon={<Icon as={FaGoogle} />}
-                width="100%"
-                height="48px"
-              >
-                Google
-              </Button>
-              <Button
-                variation="outline"
-                size="large"
-                borderRadius="8px"
-                leftIcon={<Icon as={FaGithub} />}
-                width="100%"
-                height="48px"
-              >
-                GitHub
-              </Button>
-            </Flex>
-          </Flex>
-          
-          <Flex justifyContent="center" gap="0.5rem">
-            <Text color={tokens.colors.font.secondary}>Already have an account?</Text>
-            <Link 
-              to="/login" 
-              style={{ 
-                color: tokens.colors.brand.primary[100],
-                fontWeight: '600',
-                textDecoration: 'none'
+            <Button
+              variation="link"
+              onClick={() => navigate('/login')}
+              style={{
+                color: '#0078d4',
+                fontWeight: 'bold',
+                fontFamily: "'Poppins', 'Segoe UI', sans-serif",
+                ':hover': {
+                  textDecoration: 'underline',
+                },
               }}
             >
-              Login
-            </Link>
+              Sign In
+            </Button>
           </Flex>
         </Flex>
       </Card>
