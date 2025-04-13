@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Button,
   Card,
@@ -26,9 +26,23 @@ const LoginPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const { tokens } = useTheme();
 
   useEffect(() => {
+    // Check if email was passed from verify page
+    if (location.state && location.state.email) {
+      setEmail(location.state.email);
+    } else {
+      // Try to get email from localStorage
+      const storedEmail = localStorage.getItem('pendingLoginEmail');
+      if (storedEmail) {
+        setEmail(storedEmail);
+        // Clear the stored email after using it
+        localStorage.removeItem('pendingLoginEmail');
+      }
+    }
+    
     // Sign out any existing session
     const checkUser = async () => {
       try {
@@ -40,7 +54,7 @@ const LoginPage = () => {
       }
     };
     checkUser();
-  }, []);
+  }, [location]);
 
   const handleLogin = async (e) => {
     e.preventDefault();

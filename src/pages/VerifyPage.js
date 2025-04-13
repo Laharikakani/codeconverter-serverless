@@ -16,6 +16,7 @@ import {
 import { MdEmail, MdLock, MdArrowForward, MdRefresh } from 'react-icons/md';
 import { confirmSignUp, resendSignUpCode, signOut } from 'aws-amplify/auth';
 import '@aws-amplify/ui-react/styles.css';
+import { navigateToLogin } from '../utils/navigation';
 
 const VerifyPage = () => {
   const [verificationCode, setVerificationCode] = useState('');
@@ -30,12 +31,25 @@ const VerifyPage = () => {
   const { tokens } = useTheme();
 
   useEffect(() => {
+    console.log('VerifyPage mounted, location state:', location.state);
+    
     // Get the email from the location state
     if (location.state && location.state.email) {
+      console.log('Email found in location state:', location.state.email);
       setEmail(location.state.email);
     } else {
-      // If no email in state, redirect to signup
-      navigate('/signup');
+      // Try to get email from localStorage if not in state
+      const storedEmail = localStorage.getItem('pendingVerificationEmail');
+      console.log('Email from localStorage:', storedEmail);
+      
+      if (storedEmail) {
+        console.log('Using email from localStorage:', storedEmail);
+        setEmail(storedEmail);
+      } else {
+        console.log('No email found, redirecting to signup');
+        // If no email in state or localStorage, redirect to signup
+        navigate('/signup');
+      }
     }
   }, [location, navigate]);
 
@@ -82,10 +96,8 @@ const VerifyPage = () => {
       
       setSuccess('Email verified successfully! Redirecting to login...');
       
-      // Redirect to login after a short delay
-      setTimeout(() => {
-        navigate('/login', { state: { email } });
-      }, 2000);
+      // Use the navigation utility to ensure proper navigation
+      navigateToLogin(navigate, email);
     } catch (error) {
       console.error('Verification error:', error);
       

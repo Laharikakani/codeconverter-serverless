@@ -15,6 +15,7 @@ import {
 import '@aws-amplify/ui-react/styles.css';
 import { FaUserPlus, FaEnvelope, FaLock, FaEye, FaEyeSlash, FaUser } from 'react-icons/fa';
 import { signUp, signOut } from 'aws-amplify/auth';
+import { navigateToVerify } from '../utils/navigation';
 
 const SignupPage = () => {
   const [name, setName] = useState('');
@@ -68,11 +69,18 @@ const SignupPage = () => {
     }
 
     try {
-      // Sign out any existing session before signing up
+      // Clear all cached data first
       await signOut();
-      localStorage.removeItem('token');
-      sessionStorage.removeItem('user');
-
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      // Force a clean state
+      setError('');
+      setSuccess('');
+      
+      console.log('Attempting to sign up with email:', email);
+      
+      // Try to sign up the user
       const { isSignUpComplete, nextStep } = await signUp({
         username: email,
         password,
@@ -83,17 +91,35 @@ const SignupPage = () => {
           },
         },
       });
+      
+      console.log('Sign up response:', { isSignUpComplete, nextStep });
 
-      if (isSignUpComplete && nextStep.signUpStep === 'CONFIRM_SIGN_UP') {
-        setSuccess('Account created successfully! Please check your email for verification code.');
-        setTimeout(() => {
-          navigate('/verify', { state: { email } });
-        }, 2000);
-      }
+      // Store email in localStorage
+      localStorage.setItem('pendingVerificationEmail', email);
+      
+      // Set success message
+      setSuccess('Account created successfully! Please check your email for verification code.');
+      
+      // Force navigation to verify page after a short delay
+      setTimeout(() => {
+        console.log('Forcing navigation to verify page');
+        navigate('/verify', { 
+          state: { email },
+          replace: true // Use replace to prevent back button issues
+        });
+      }, 1000);
+      
     } catch (error) {
       console.error('Error signing up:', error);
+      
       if (error.message.includes('User already exists')) {
-        setError('An account with this email already exists');
+        console.log('User already exists error detected');
+        
+        // Instead of modifying the email, show a clear error message
+        setError('An account with this email already exists. Please use a different email or try logging in.');
+        
+        // Clear the email field to make it easy to change
+        setEmail('');
       } else if (error.message.includes('Password did not conform with policy')) {
         setError('Password must contain at least 8 characters, including uppercase, lowercase, numbers, and special characters');
       } else {
