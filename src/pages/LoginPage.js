@@ -160,11 +160,8 @@ const LoginPage = () => {
           </Flex>
 
           {error && (
-            <Alert variation="error" isDismissible={true} style={{ borderRadius: '8px' }}>
-              <Flex alignItems="center" gap="0.5rem">
-                <Icon as={FaUserCircle} color="#d32f2f" />
-                <Text fontWeight="bold">{error}</Text>
-              </Flex>
+            <Alert variation="error" isDismissible={true} style={{ borderRadius: '8px', backgroundColor: 'rgba(211, 47, 47, 0.1)', border: '1px solid rgba(211, 47, 47, 0.3)' }}>
+              <Text fontWeight="bold" style={{ color: '#d32f2f' }}>{error}</Text>
             </Alert>
           )}
 

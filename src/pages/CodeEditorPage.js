@@ -364,7 +364,15 @@ const CodeEditorPage = () => {
             .replace(/\.equals\((.*?)\)/g, '== $1')
             .replace(/null/g, 'None')
             .replace(/\btrue\b/g, 'True')
-            .replace(/\bfalse\b/g, 'False');
+            .replace(/\bfalse\b/g, 'False')
+            // Fix class method declarations
+            .replace(/def\s+(\w+)\s*\(\s*String\s*\[\s*\]\s*(\w+)\s*\):/g, 'def $1(self, $2):')
+            .replace(/def\s+(\w+)\s*\(\s*(\w+)\s*\):/g, 'def $1(self, $2):')
+            .replace(/def\s+(\w+)\s*\(\):/g, 'def $1(self):')
+            // Fix string concatenation
+            .replace(/"\s*\+\s*(\w+)\s*\+\s*"/g, 'f"{$1}"')
+            .replace(/"\s*\+\s*(\w+)\s*\+\s*"/g, 'f"{$1}"')
+            .replace(/"([^"]*)"\s*\+\s*(\w+)\s*\+\s*"([^"]*)"/g, 'f"$1{$2}$3"');
         } else if (fromLang === 'python' && toLang === 'java') {
           // Python to Java specific conversions
           result = result
@@ -393,6 +401,32 @@ const CodeEditorPage = () => {
           if (result.includes('random.')) {
             result = 'import random\n' + result;
           }
+          
+          // Fix Python class structure
+          if (result.includes('class') && !result.includes('def __init__')) {
+            // Add proper Python class structure
+            result = result.replace(/class\s+(\w+):/g, 'class $1:\n    def __init__(self):\n        pass');
+          }
+          
+          // Fix Python method declarations
+          result = result.replace(/def\s+(\w+)\s*\(\s*String\s*\[\s*\]\s*(\w+)\s*\):/g, 'def $1(self, $2):');
+          result = result.replace(/def\s+(\w+)\s*\(\s*(\w+)\s*\):/g, 'def $1(self, $2):');
+          result = result.replace(/def\s+(\w+)\s*\(\):/g, 'def $1(self):');
+          
+          // Fix Python string concatenation
+          result = result.replace(/"\s*\+\s*(\w+)\s*\+\s*"/g, 'f"{$1}"');
+          result = result.replace(/"([^"]*)"\s*\+\s*(\w+)\s*\+\s*"([^"]*)"/g, 'f"$1{$2}$3"');
+          
+          // Fix Python variable declarations
+          result = result.replace(/(\w+)\s*=\s*(\d+);/g, '$1 = $2');
+          
+          // Fix Python print statements
+          result = result.replace(/print\((.*?)\);/g, 'print($1)');
+          
+          // Fix Python main method
+          if (result.includes('def main')) {
+            result = result.replace(/def\s+main\s*\(.*?\):/g, 'if __name__ == "__main__":');
+          }
         } else if (toLang === 'java') {
           if (result.includes('System.out.println')) {
             result = 'import java.io.*;\n' + result;
@@ -403,6 +437,57 @@ const CodeEditorPage = () => {
           if (result.includes('HashMap')) {
             result = 'import java.util.HashMap;\n' + result;
           }
+        }
+        
+        // Remove curly braces when converting to Python
+        if (toLang === 'python') {
+          // Remove standalone closing braces
+          result = result.replace(/\s*}\s*$/gm, '');
+          
+          // Remove braces at the end of lines
+          result = result.replace(/\s*{\s*$/gm, '');
+          
+          // Remove semicolons at the end of lines
+          result = result.replace(/;\s*$/gm, '');
+          
+          // Fix indentation for Python
+          const lines = result.split('\n');
+          let indentLevel = 0;
+          const processedLines = lines.map(line => {
+            // Check if line contains a closing brace
+            if (line.includes('}')) {
+              indentLevel = Math.max(0, indentLevel - 1);
+            }
+            
+            // Create indentation
+            const indentation = '    '.repeat(indentLevel);
+            
+            // Check if line contains an opening brace
+            if (line.includes('{')) {
+              indentLevel++;
+            }
+            
+            // Remove braces and return indented line
+            return indentation + line.replace(/[{}]/g, '');
+          });
+          
+          result = processedLines.join('\n');
+          
+          // Additional cleanup for Python code
+          // Remove any remaining closing braces at the end of the code
+          result = result.replace(/\s*}\s*$/g, '');
+          
+          // Remove any trailing whitespace
+          result = result.replace(/\s+$/gm, '');
+          
+          // Remove any empty lines at the end
+          result = result.replace(/\n+$/, '');
+          
+          // Remove any remaining semicolons
+          result = result.replace(/;/g, '');
+          
+          // Remove any remaining curly braces
+          result = result.replace(/[{}]/g, '');
         }
         
         return result;
