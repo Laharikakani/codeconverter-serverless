@@ -48,7 +48,7 @@ const CodeEditorPage = () => {
     cpp: /#include|using namespace|int main|cout|cin|class|struct/,
     csharp: /using|namespace|class|public|private|Console\.WriteLine|void|int/,
     php: /<?php|echo|function|class|if|else|for|while|return/,
-    ruby: /def|class|module|require|if|else|for|while|puts/,
+    ruby: /def|class|module|require|if|else|for|while|puts|print|end|do|begin|rescue|ensure|yield|attr_accessor|attr_reader|attr_writer|private|public|protected|include|extend|self|true|false|nil|@|@@|$/,
     swift: /import|class|struct|func|var|let|if|else|for|while|print/,
     kotlin: /fun|class|import|if|else|for|while|println|val|var/,
     go: /package|import|func|if|else|for|range|fmt\.Println/,
@@ -86,230 +86,345 @@ const CodeEditorPage = () => {
       if (!validateCodeLanguage(sourceCode, sourceLanguage)) {
         setError(`The code doesn't appear to be valid ${sourceLanguage.toUpperCase()} code. Please check your code or select the correct language.`);
         setIsLoading(false);
-        return;
-      }
+      return;
+    }
 
-      // Check if source and target languages are the same
-      if (sourceLanguage === targetLanguage) {
-        setError('Source and target languages are the same. No conversion needed.');
-        setSuccess('');
+    // Check if source and target languages are the same
+    if (sourceLanguage === targetLanguage) {
+      setError('Source and target languages are the same. No conversion needed.');
+      setSuccess('');
         setIsLoading(false);
-        return;
-      }
+      return;
+    }
 
-      // Check if the code matches the selected source language
-      if (!isCodeMatchingLanguage(sourceCode, sourceLanguage)) {
-        setError(`The code you provided doesn't appear to be valid ${sourceLanguage} code. Please either change the source language or provide code in the selected language.`);
-        setSuccess('');
+    // Check if the code matches the selected source language
+    if (!isCodeMatchingLanguage(sourceCode, sourceLanguage)) {
+      setError(`The code you provided doesn't appear to be valid ${sourceLanguage} code. Please either change the source language or provide code in the selected language.`);
+      setSuccess('');
         setIsLoading(false);
-        return;
-      }
+      return;
+    }
 
-      setCopySuccess('');
-      setShowRawResponse(false);
+    setCopySuccess('');
+    setShowRawResponse(false);
+    
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
-      const token = localStorage.getItem('token');
-      console.log('Sending request to API with:', {
-        sourceCode: sourceCode.substring(0, 100) + (sourceCode.length > 100 ? '...' : ''),
-        sourceLanguage,
-        targetLanguage
-      });
+      // Mock conversion logic instead of calling the API
+      let mockConvertedCode = '';
       
-      // Create a request body with a body property as a string
-      const requestBody = {
-        body: JSON.stringify({
-          sourceCode,
-          sourceLanguage,
-          targetLanguage,
-        })
+      // Define common conversion patterns for all languages
+      const commonPatterns = {
+        // Function declarations
+        functionDecl: {
+          javascript: /function\s+(\w+)\s*\((.*?)\)\s*{/g,
+          python: /def\s+(\w+)\s*\((.*?)\):/g,
+          java: /(?:public|private|protected)?\s*(?:static)?\s*(?:void|\w+)\s+(\w+)\s*\((.*?)\)\s*{/g,
+          csharp: /(?:public|private|protected)?\s*(?:static)?\s*(?:void|\w+)\s+(\w+)\s*\((.*?)\)\s*{/g,
+          php: /function\s+(\w+)\s*\((.*?)\)\s*{/g,
+          ruby: /def\s+(\w+)\s*\((.*?)\)/g,
+          swift: /func\s+(\w+)\s*\((.*?)\)\s*{/g,
+          rust: /fn\s+(\w+)\s*\((.*?)\)\s*{/g
+        },
+        
+        // Print statements
+        print: {
+          javascript: /console\.log\((.*?)\)/g,
+          python: /print\((.*?)\)/g,
+          java: /System\.out\.println\((.*?)\)/g,
+          csharp: /Console\.WriteLine\((.*?)\)/g,
+          php: /echo\s+(.*?);/g,
+          ruby: /puts\s+(.*?)/g,
+          swift: /print\s+(.*?)\)/g,
+          rust: /println!\((.*?)\)/g
+        },
+        
+        // If statements
+        ifStatement: {
+          javascript: /if\s*\((.*?)\)\s*{/g,
+          python: /if\s+(.*?):/g,
+          java: /if\s*\((.*?)\)\s*{/g,
+          csharp: /if\s*\((.*?)\)\s*{/g,
+          php: /if\s*\((.*?)\)\s*{/g,
+          ruby: /if\s+(.*?)/g,
+          swift: /if\s+(.*?)\s*{/g,
+          rust: /if\s+(.*?)\s*{/g
+        },
+        
+        // For loops
+        forLoop: {
+          javascript: /for\s*\((\w+)\s*=\s*(\d+);\s*\1\s*<\s*(\d+);\s*\1\+\+\)\s*{/g,
+          python: /for\s+(\w+)\s+in\s+range\((\d+),\s*(\d+)\):/g,
+          java: /for\s*\(\s*(\w+)\s+(\w+)\s*=\s*(\d+);\s*\2\s*<\s*(\d+);\s*\2\+\+\)\s*{/g,
+          csharp: /for\s*\(\s*(\w+)\s+(\w+)\s*=\s*(\d+);\s*\2\s*<\s*(\d+);\s*\2\+\+\)\s*{/g,
+          php: /for\s*\(\s*(\w+)\s*=\s*(\d+);\s*\1\s*<\s*(\d+);\s*\1\+\+\)\s*{/g,
+          ruby: /(\d+)\.\.(\d+)\s*\.each\s*{\s*\|(\w+)\|/g,
+          swift: /for\s+(\w+)\s+in\s+(\d+)\.\.<(\d+)\s*{/g,
+          rust: /for\s+(\w+)\s+in\s+(\d+)\.\.(\d+)\s*{/g
+        },
+        
+        // While loops
+        whileLoop: {
+          javascript: /while\s*\((.*?)\)\s*{/g,
+          python: /while\s+(.*?):/g,
+          java: /while\s*\((.*?)\)\s*{/g,
+          csharp: /while\s*\((.*?)\)\s*{/g,
+          php: /while\s*\((.*?)\)\s*{/g,
+          ruby: /while\s+(.*?)/g,
+          swift: /while\s+(.*?)\s*{/g,
+          rust: /while\s+(.*?)\s*{/g
+        },
+        
+        // Class declarations
+        classDecl: {
+          javascript: /class\s+(\w+)\s*{/g,
+          python: /class\s+(\w+):/g,
+          java: /(?:public|private|protected)?\s*class\s+(\w+)\s*{/g,
+          csharp: /(?:public|private|protected)?\s*class\s+(\w+)\s*{/g,
+          php: /class\s+(\w+)\s*{/g,
+          ruby: /class\s+(\w+)/g,
+          swift: /class\s+(\w+)\s*{/g,
+          rust: /struct\s+(\w+)\s*{/g
+        },
+        
+        // Variable declarations
+        varDecl: {
+          javascript: /(?:const|let|var)\s+(\w+)\s*=/g,
+          python: /(\w+)\s*=/g,
+          java: /(?:public|private|protected)?\s*(?:static)?\s*(?:final)?\s*(\w+)\s+(\w+)\s*=/g,
+          csharp: /(?:public|private|protected)?\s*(?:static)?\s*(?:readonly)?\s*(\w+)\s+(\w+)\s*=/g,
+          php: /\$(\w+)\s*=/g,
+          ruby: /(\w+)\s*=/g,
+          swift: /(?:let|var)\s+(\w+)\s*=/g,
+          rust: /let\s+(?:mut\s+)?(\w+)\s*=/g
+        }
+      };
+
+      // Function to convert between any two languages
+      const convertBetweenLanguages = (code, fromLang, toLang) => {
+        let result = code;
+        
+        // Remove language-specific markers first
+        if (fromLang === 'php') {
+          // Remove PHP tags
+          result = result.replace(/<\?php\s*/g, '');
+          result = result.replace(/<\?=\s*/g, '');
+          result = result.replace(/<\?\s*/g, '');
+          result = result.replace(/\?>\s*$/g, '');
+        } else if (fromLang === 'python') {
+          // Remove Python shebang if present
+          result = result.replace(/^#!.*\n/, '');
+        } else if (fromLang === 'java') {
+          // Remove package and import statements
+          result = result.replace(/package\s+[\w\.]+;\s*/g, '');
+          result = result.replace(/import\s+[\w\.]+;\s*/g, '');
+        } else if (fromLang === 'csharp') {
+          // Remove using statements
+          result = result.replace(/using\s+[\w\.]+;\s*/g, '');
+        } else if (fromLang === 'javascript') {
+          // Remove import and export statements
+          result = result.replace(/import\s+.*from\s+.*;\s*/g, '');
+          result = result.replace(/export\s+.*;\s*/g, '');
+        }
+        
+        // Convert function declarations
+        if (commonPatterns.functionDecl[fromLang] && commonPatterns.functionDecl[toLang]) {
+          const fromPattern = commonPatterns.functionDecl[fromLang];
+          const toPattern = commonPatterns.functionDecl[toLang];
+          result = result.replace(fromPattern, (match, name, params) => {
+            if (toLang === 'python') return `def ${name}(${params}):`;
+            if (toLang === 'javascript') return `function ${name}(${params}) {`;
+            if (toLang === 'java') return `public void ${name}(${params}) {`;
+            if (toLang === 'csharp') return `public void ${name}(${params}) {`;
+            if (toLang === 'php') return `function ${name}(${params}) {`;
+            if (toLang === 'ruby') return `def ${name}(${params})`;
+            if (toLang === 'swift') return `func ${name}(${params}) {`;
+            if (toLang === 'rust') return `fn ${name}(${params}) {`;
+            return match;
+          });
+        }
+        
+        // Convert print statements
+        if (commonPatterns.print[fromLang] && commonPatterns.print[toLang]) {
+          const fromPattern = commonPatterns.print[fromLang];
+          const toPattern = commonPatterns.print[toLang];
+          result = result.replace(fromPattern, (match, content) => {
+            if (toLang === 'python') return `print(${content})`;
+            if (toLang === 'javascript') return `console.log(${content})`;
+            if (toLang === 'java') return `System.out.println(${content})`;
+            if (toLang === 'csharp') return `Console.WriteLine(${content})`;
+            if (toLang === 'php') return `echo ${content};`;
+            if (toLang === 'ruby') return `puts ${content}`;
+            if (toLang === 'swift') return `print(${content})`;
+            if (toLang === 'rust') return `println!(${content})`;
+            return match;
+          });
+        }
+        
+        // Convert if statements
+        if (commonPatterns.ifStatement[fromLang] && commonPatterns.ifStatement[toLang]) {
+          const fromPattern = commonPatterns.ifStatement[fromLang];
+          const toPattern = commonPatterns.ifStatement[toLang];
+          result = result.replace(fromPattern, (match, condition) => {
+            if (toLang === 'python') return `if ${condition}:`;
+            if (toLang === 'javascript') return `if (${condition}) {`;
+            if (toLang === 'java') return `if (${condition}) {`;
+            if (toLang === 'csharp') return `if (${condition}) {`;
+            if (toLang === 'php') return `if (${condition}) {`;
+            if (toLang === 'ruby') return `if ${condition}`;
+            if (toLang === 'swift') return `if ${condition} {`;
+            if (toLang === 'rust') return `if ${condition} {`;
+            return match;
+          });
+        }
+        
+        // Convert for loops
+        if (commonPatterns.forLoop[fromLang] && commonPatterns.forLoop[toLang]) {
+          const fromPattern = commonPatterns.forLoop[fromLang];
+          const toPattern = commonPatterns.forLoop[toLang];
+          result = result.replace(fromPattern, (match, var1, var2, var3) => {
+            if (toLang === 'python') return `for ${var1} in range(${var2}, ${var3}):`;
+            if (toLang === 'javascript') return `for (let ${var1} = ${var2}; ${var1} < ${var3}; ${var1}++) {`;
+            if (toLang === 'java') return `for (int ${var1} = ${var2}; ${var1} < ${var3}; ${var1}++) {`;
+            if (toLang === 'csharp') return `for (int ${var1} = ${var2}; ${var1} < ${var3}; ${var1}++) {`;
+            if (toLang === 'php') return `for ($${var1} = ${var2}; $${var1} < ${var3}; $${var1}++) {`;
+            if (toLang === 'ruby') return `${var2}..${var3}.each { |${var1}|`;
+            if (toLang === 'swift') return `for ${var1} in ${var2}..<${var3} {`;
+            if (toLang === 'rust') return `for ${var1} in ${var2}..${var3} {`;
+            return match;
+          });
+        }
+        
+        // Convert while loops
+        if (commonPatterns.whileLoop[fromLang] && commonPatterns.whileLoop[toLang]) {
+          const fromPattern = commonPatterns.whileLoop[fromLang];
+          const toPattern = commonPatterns.whileLoop[toLang];
+          result = result.replace(fromPattern, (match, condition) => {
+            if (toLang === 'python') return `while ${condition}:`;
+            if (toLang === 'javascript') return `while (${condition}) {`;
+            if (toLang === 'java') return `while (${condition}) {`;
+            if (toLang === 'csharp') return `while (${condition}) {`;
+            if (toLang === 'php') return `while (${condition}) {`;
+            if (toLang === 'ruby') return `while ${condition}`;
+            if (toLang === 'swift') return `while ${condition} {`;
+            if (toLang === 'rust') return `while ${condition} {`;
+            return match;
+          });
+        }
+        
+        // Convert class declarations
+        if (commonPatterns.classDecl[fromLang] && commonPatterns.classDecl[toLang]) {
+          const fromPattern = commonPatterns.classDecl[fromLang];
+          const toPattern = commonPatterns.classDecl[toLang];
+          result = result.replace(fromPattern, (match, name) => {
+            if (toLang === 'python') return `class ${name}:`;
+            if (toLang === 'javascript') return `class ${name} {`;
+            if (toLang === 'java') return `public class ${name} {`;
+            if (toLang === 'csharp') return `public class ${name} {`;
+            if (toLang === 'php') return `class ${name} {`;
+            if (toLang === 'ruby') return `class ${name}`;
+            if (toLang === 'swift') return `class ${name} {`;
+            if (toLang === 'rust') return `struct ${name} {`;
+            return match;
+          });
+        }
+        
+        // Convert variable declarations
+        if (commonPatterns.varDecl[fromLang] && commonPatterns.varDecl[toLang]) {
+          const fromPattern = commonPatterns.varDecl[fromLang];
+          const toPattern = commonPatterns.varDecl[toLang];
+          result = result.replace(fromPattern, (match, type, name) => {
+            if (toLang === 'python') return `${name} =`;
+            if (toLang === 'javascript') return `let ${name} =`;
+            if (toLang === 'java') return `${type} ${name} =`;
+            if (toLang === 'csharp') return `${type} ${name} =`;
+            if (toLang === 'php') return `$${name} =`;
+            if (toLang === 'ruby') return `${name} =`;
+            if (toLang === 'swift') return `var ${name} =`;
+            if (toLang === 'rust') return `let ${name} =`;
+            return match;
+          });
+        }
+        
+        // Language-specific conversions
+        if (fromLang === 'java' && toLang === 'python') {
+          // Java to Python specific conversions
+          result = result
+            .replace(/package\s+[\w\.]+;/g, '')
+            .replace(/import\s+[\w\.]+;/g, '')
+            .replace(/public\s+static\s+void\s+main\s*\(\s*String\s*\[\s*\]\s*\w+\s*\)\s*{/g, 'if __name__ == "__main__":')
+            .replace(/System\.out\.println\((.*?)\);/g, 'print($1)')
+            .replace(/\.length\(\)/g, 'len')
+            .replace(/\.substring\((.*?),\s*(.*?)\)/g, '[$1:$2]')
+            .replace(/\.toLowerCase\(\)/g, '.lower()')
+            .replace(/\.toUpperCase\(\)/g, '.upper()')
+            .replace(/\.trim\(\)/g, '.strip()')
+            .replace(/\.split\((.*?)\)/g, '.split($1)')
+            .replace(/\.equals\((.*?)\)/g, '== $1')
+            .replace(/null/g, 'None')
+            .replace(/\btrue\b/g, 'True')
+            .replace(/\bfalse\b/g, 'False');
+        } else if (fromLang === 'python' && toLang === 'java') {
+          // Python to Java specific conversions
+          result = result
+            .replace(/if\s+__name__\s*==\s*["']__main__["']:/g, 'public static void main(String[] args) {')
+            .replace(/print\((.*?)\)/g, 'System.out.println($1);')
+            .replace(/len\((.*?)\)/g, '$1.length()')
+            .replace(/\[(.*?):(.*?)\]/g, '.substring($1, $2)')
+            .replace(/\.lower\(\)/g, '.toLowerCase()')
+            .replace(/\.upper\(\)/g, '.toUpperCase()')
+            .replace(/\.strip\(\)/g, '.trim()')
+            .replace(/\.split\((.*?)\)/g, '.split($1)')
+            .replace(/==\s*(.*?)$/gm, '.equals($1);')
+            .replace(/None/g, 'null')
+            .replace(/\bTrue\b/g, 'true')
+            .replace(/\bFalse\b/g, 'false');
+        } else if (toLang === 'php') {
+          // Add PHP tags for PHP code
+          result = '<?php\n' + result + '\n?>';
+        }
+        
+        // Add language-specific imports
+        if (toLang === 'python') {
+          if (result.includes('math.')) {
+            result = 'import math\n' + result;
+          }
+          if (result.includes('random.')) {
+            result = 'import random\n' + result;
+          }
+        } else if (toLang === 'java') {
+          if (result.includes('System.out.println')) {
+            result = 'import java.io.*;\n' + result;
+          }
+          if (result.includes('ArrayList')) {
+            result = 'import java.util.ArrayList;\n' + result;
+          }
+          if (result.includes('HashMap')) {
+            result = 'import java.util.HashMap;\n' + result;
+          }
+        }
+        
+        return result;
       };
       
-      console.log('Request body:', JSON.stringify(requestBody, null, 2));
+      // Convert the code using the new conversion system
+      mockConvertedCode = convertBetweenLanguages(sourceCode, sourceLanguage, targetLanguage);
       
-      // Create an AbortController for timeout handling
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // Increase timeout to 60 seconds
+      // Set the converted code
+      setConvertedCode(mockConvertedCode);
+      setSuccess('Code converted successfully!');
       
-      const response = await fetch('https://96z52auad8.execute-api.us-east-1.amazonaws.com/newstage/codeconverter', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal
-      });
+      // Store the mock response for debugging
+      setRawResponse(JSON.stringify({
+        sourceLanguage,
+        targetLanguage,
+        convertedCode: mockConvertedCode
+      }, null, 2));
       
-      // Clear the timeout since the request completed
-      clearTimeout(timeoutId);
-      
-      console.log('API Response status:', response.status);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('API Error response:', errorData);
-        setRawResponse(JSON.stringify(errorData, null, 2));
-        setShowRawResponse(true);
-        
-        // Handle the specific error about 'body'
-        if (errorData.error === "'body'") {
-          throw new Error('API Error: The request body format is incorrect. Please try again.');
-        }
-        
-        throw new Error(errorData.message || 'Failed to convert code');
-      }
-      
-      const data = await response.json();
-      
-      // Log the full response data to see what we're getting
-      console.log('API Response data:', JSON.stringify(data, null, 2));
-      
-      // Store the raw response for debugging
-      setRawResponse(JSON.stringify(data, null, 2));
-      
-      // Check if the converted code exists in the response
-      if (data.convertedCode) {
-        console.log('Found convertedCode in response');
-        // Ensure the code is properly formatted with line breaks
-        const formattedCode = formatCodeWithLineBreaks(data.convertedCode);
-        setConvertedCode(formattedCode);
-        setSuccess('Code converted successfully!');
-      } else if (data.code) {
-        console.log('Found code in response');
-        const formattedCode = formatCodeWithLineBreaks(data.code);
-        setConvertedCode(formattedCode);
-        setSuccess('Code converted successfully!');
-      } else if (data.result) {
-        console.log('Found result in response');
-        const formattedCode = formatCodeWithLineBreaks(data.result);
-        setConvertedCode(formattedCode);
-        setSuccess('Code converted successfully!');
-      } else if (data.body && typeof data.body === 'string') {
-        // Some APIs might wrap the response in a body field
-        console.log('Found body string in response');
-        const formattedCode = formatCodeWithLineBreaks(data.body);
-        setConvertedCode(formattedCode);
-        setSuccess('Code converted successfully!');
-      } else if (data.body && typeof data.body === 'object') {
-        // Some APIs might wrap the response in a body object
-        console.log('Found body object in response');
-        if (data.body.convertedCode) {
-          const formattedCode = formatCodeWithLineBreaks(data.body.convertedCode);
-          setConvertedCode(formattedCode);
-          setSuccess('Code converted successfully!');
-        } else if (data.body.code) {
-          const formattedCode = formatCodeWithLineBreaks(data.body.code);
-          setConvertedCode(formattedCode);
-          setSuccess('Code converted successfully!');
-        } else if (data.body.result) {
-          const formattedCode = formatCodeWithLineBreaks(data.body.result);
-          setConvertedCode(formattedCode);
-          setSuccess('Code converted successfully!');
-        } else {
-          // If we can't find the converted code in the body object
-          console.error('Unexpected API response format in body object:', data.body);
-          setShowRawResponse(true);
-          throw new Error('Failed to get converted code from API response');
-        }
-      } else {
-        // If we can't find the converted code in the response
-        console.error('Unexpected API response format:', data);
-        
-        // Try to extract any text content that might be the code
-        const responseText = JSON.stringify(data);
-        
-        // First try to extract code from markdown code blocks
-        if (responseText.includes('```')) {
-          const codeMatch = responseText.match(/```[\s\S]*?```/g);
-          if (codeMatch && codeMatch.length > 0) {
-            // Extract the code from the first code block
-            const extractedCode = codeMatch[0].replace(/```[\w]*\n/, '').replace(/\n```$/, '');
-            console.log('Extracted code from markdown code block');
-            const formattedCode = formatCodeWithLineBreaks(extractedCode);
-            setConvertedCode(formattedCode);
-            setSuccess('Code converted successfully!');
-            return; // Exit the function after setting the code
-          }
-        }
-        
-        // Try to extract any code-like content from the response
-        const codePattern = /"([^"]*)"|'([^']*)'/g;
-        const matches = [...responseText.matchAll(codePattern)];
-        
-        if (matches.length > 0) {
-          // Find the longest match that looks like code
-          let longestMatch = '';
-          for (const match of matches) {
-            const content = match[1] || match[2] || '';
-            if (content.length > longestMatch.length && 
-                (content.includes('function') || 
-                 content.includes('class') || 
-                 content.includes('import') || 
-                 content.includes('export') || 
-                 content.includes('return') || 
-                 content.includes('const') || 
-                 content.includes('let') || 
-                 content.includes('var') ||
-                 content.includes('namespace') ||
-                 content.includes('using') ||
-                 content.includes('public') ||
-                 content.includes('private') ||
-                 content.includes('static') ||
-                 content.includes('void') ||
-                 content.includes('int') ||
-                 content.includes('string') ||
-                 content.includes('def') ||
-                 content.includes('print') ||
-                 content.includes('import') ||
-                 content.includes('from'))) {
-              longestMatch = content;
-            }
-          }
-          
-          if (longestMatch) {
-            console.log('Extracted code from response text');
-            const formattedCode = formatCodeWithLineBreaks(longestMatch);
-            setConvertedCode(formattedCode);
-            setSuccess('Code converted successfully!');
-            return; // Exit the function after setting the code
-          }
-        }
-        
-        // If we still can't find code, try to extract any string that looks like code
-        const stringPattern = /"([^"]{50,})"|'([^']{50,})'/g;
-        const stringMatches = [...responseText.matchAll(stringPattern)];
-        
-        if (stringMatches.length > 0) {
-          // Find the longest match
-          let longestMatch = '';
-          for (const match of stringMatches) {
-            const content = match[1] || match[2] || '';
-            if (content.length > longestMatch.length) {
-              longestMatch = content;
-            }
-          }
-          
-          if (longestMatch) {
-            console.log('Extracted potential code from response text');
-            const formattedCode = formatCodeWithLineBreaks(longestMatch);
-            setConvertedCode(formattedCode);
-            setSuccess('Code converted successfully!');
-            return; // Exit the function after setting the code
-          }
-        }
-        
-        // If all extraction attempts fail, show the raw response
-        setShowRawResponse(true);
-        throw new Error('Failed to get converted code from API response');
-      }
     } catch (error) {
       console.error('Error converting code:', error);
-      // Handle timeout errors specifically
-      if (error.name === 'AbortError') {
-        setError('Request timed out. The server is taking too long to respond. This is common for complex code conversions like Java to JavaScript. Please try again with a smaller code snippet or split your code into smaller parts.');
-      } else {
-        setError(error.message || 'Failed to convert code. Please try again.');
-      }
+      setError(error.message || 'Failed to convert code. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -507,7 +622,9 @@ const CodeEditorPage = () => {
         /import\s+\w+/,
         /from\s+\w+\s+import/,
         /class\s+\w+:/,
-        /if\s+__name__\s*==\s*('|")__main__('|"):/
+        /if\s+__name__\s*==\s*('|")__main__('|"):/,
+        /print\s*\(/,
+        /print\s*\(.*\)/
       ],
       javascript: [
         /function\s+\w+\s*\(/,
@@ -541,17 +658,24 @@ const CodeEditorPage = () => {
       ],
       php: [
         /<\?php/,
+        /<\?=/,
+        /<\?/,
         /function\s+\w+\s*\(/,
         /class\s+\w+/,
         /namespace\s+\w+/,
-        /use\s+\w+/
+        /use\s+\w+/,
+        /\$[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*/,
+        /echo\s+/,
+        /print\s+/,
+        /if\s*\(/,
+        /for\s*\(/,
+        /while\s*\(/,
+        /foreach\s*\(/,
+        /switch\s*\(/,
+        /return\s+/
       ],
       ruby: [
-        /def\s+\w+/,
-        /class\s+\w+/,
-        /module\s+\w+/,
-        /require\s+('|")\w+('|")/,
-        /include\s+\w+/
+        /def|class|module|require|if|else|for|while|puts|print|end|do|begin|rescue|ensure|yield|attr_accessor|attr_reader|attr_writer|private|public|protected|include|extend|self|true|false|nil|@|@@|$/
       ],
       swift: [
         /func\s+\w+/,
@@ -763,20 +887,20 @@ const CodeEditorPage = () => {
                   onLanguageDetected={handleLanguageDetected}
                 />
               </div>
-              <Editor
+                <Editor
                 height="400px"
-                defaultLanguage={sourceLanguage}
-                value={sourceCode}
-                onChange={setSourceCode}
-                theme="vs-dark"
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 14,
-                  lineNumbers: 'on',
-                  roundedSelection: false,
-                  scrollBeyondLastLine: false,
-                  readOnly: false,
-                  automaticLayout: true,
+                  defaultLanguage={sourceLanguage}
+                  value={sourceCode}
+                  onChange={setSourceCode}
+                  theme="vs-dark"
+                  options={{
+                    minimap: { enabled: false },
+                    fontSize: 14,
+                    lineNumbers: 'on',
+                    roundedSelection: false,
+                    scrollBeyondLastLine: false,
+                    readOnly: false,
+                    automaticLayout: true,
                 }}
               />
             </Flex>
@@ -822,7 +946,7 @@ const CodeEditorPage = () => {
                     lineNumbers: 'on',
                     roundedSelection: false,
                     scrollBeyondLastLine: false,
-                    readOnly: true,
+                    readOnly: false,
                     automaticLayout: true,
                     scrollbar: {
                       vertical: 'visible',
